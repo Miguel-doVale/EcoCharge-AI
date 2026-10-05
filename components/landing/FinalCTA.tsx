@@ -23,7 +23,7 @@ export default function FinalCTA() {
       <motion.p style={{ x }} className="whitespace-nowrap font-display text-[clamp(4rem,14vw,13rem)] font-semibold leading-none tracking-[-0.05em] text-white/[.06]" aria-hidden>
         carregue onde tem vaga · carregue onde tem vaga
       </motion.p>
-      <div className="mx-auto -mt-[clamp(3rem,9vw,8rem)] flex max-w-[1320px] flex-col items-start gap-8 px-5 sm:px-8 md:flex-row md:items-end md:justify-between">
+      <div className="mx-auto -mt-[clamp(3rem,9vw,8rem)] flex max-w-[1320px] flex-col items-center gap-8 px-5 text-center sm:px-8 md:flex-row md:items-end md:justify-between md:text-left">
         <h2 className="max-w-[14ch] font-display text-[clamp(2.2rem,5vw,4.4rem)] font-semibold leading-[1] tracking-[-0.035em]">
           Teste o navegador agora.
         </h2>

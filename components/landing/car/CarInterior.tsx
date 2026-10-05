@@ -161,7 +161,7 @@ export default function CarInterior({ withDriverDoorTrim = false }: { withDriver
       {/* console central */}
       <RoundedBox args={[0.85, 0.2, 0.22]} radius={0.04} position={[0.12, 0.62, 0]} material={m.dash} />
       <RoundedBox args={[0.36, 0.06, 0.2]} radius={0.025} position={[-0.25, 0.75, 0]}><meshStandardMaterial color="#4a5058" roughness={0.9} /></RoundedBox>
-      <mesh position={[0.3, 0.76, 0]}><sphereGeometry args={[0.03, 24, 24]} /><meshPhysicalMaterial color="#ffffff" transmission={0.7} roughness={0.05} thickness={0.04} /></mesh>
+      <mesh position={[0.3, 0.76, 0]}><sphereGeometry args={[0.03, 24, 24]} /><meshPhysicalMaterial color="#e8f3f5" roughness={0.05} metalness={0.1} clearcoat={1} transparent opacity={0.75} /></mesh>
       <mesh position={[0.1, 0.723, 0]} rotation={[-Math.PI / 2, 0, 0]}><planeGeometry args={[0.18, 0.12]} /><meshStandardMaterial color="#0e1013" roughness={0.3} metalness={0.4} /></mesh>
       {[-0.06, 0, 0.06].map((z) => (
         <mesh key={z} position={[0.42, 0.725, z]}><cylinderGeometry args={[0.012, 0.012, 0.01, 16]} /><meshStandardMaterial color="#aab1b8" metalness={0.9} roughness={0.25} /></mesh>

@@ -94,7 +94,7 @@ function River() {
   );
 }
 
-function ChargerBeacon({ p, color, idx }: { p: THREE.Vector3; color: string; idx: number }) {
+function ChargerBeacon({ p, color, idx, light }: { p: THREE.Vector3; color: string; idx: number; light: boolean }) {
   const ring = useRef<THREE.Mesh>(null);
   const beam = useRef<THREE.Mesh>(null);
   useFrame(({ clock }) => {
@@ -112,7 +112,7 @@ function ChargerBeacon({ p, color, idx }: { p: THREE.Vector3; color: string; idx
         <sphereGeometry args={[0.16, 20, 20]} />
         <meshBasicMaterial color={color} />
       </mesh>
-      <pointLight color={color} intensity={2.2} distance={4} decay={1.6} position={[0, 0.5, 0]} />
+      {light && <pointLight color={color} intensity={2.2} distance={4} decay={1.6} position={[0, 0.5, 0]} />}
       <mesh ref={ring} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]}>
         <ringGeometry args={[0.3, 0.38, 48]} />
         <meshBasicMaterial color={color} transparent opacity={0.6} blending={THREE.AdditiveBlending} depthWrite={false} />
@@ -122,8 +122,9 @@ function ChargerBeacon({ p, color, idx }: { p: THREE.Vector3; color: string; idx
 }
 
 function Chargers({ w }: { w: ReturnType<typeof createWorld> }) {
-  const list = useMemo(() => w.chargers.filter((c) => near(c.pos)), [w]);
-  return <>{list.map((c, i) => <ChargerBeacon key={c.id} idx={i} p={toV(c.pos)} color={STATUS[level(c)]} />)}</>;
+  // cada luz pontual pesa em todos os materiais: só os 4 postos mais próximos do centro iluminam o chão
+  const list = useMemo(() => w.chargers.filter((c) => near(c.pos)).sort((a, b) => Math.hypot(a.pos.x - CENTER.x, a.pos.y - CENTER.y) - Math.hypot(b.pos.x - CENTER.x, b.pos.y - CENTER.y)), [w]);
+  return <>{list.map((c, i) => <ChargerBeacon key={c.id} idx={i} light={i < 4} p={toV(c.pos)} color={STATUS[level(c)]} />)}</>;
 }
 
 function EVs({ w }: { w: ReturnType<typeof createWorld> }) {
@@ -183,6 +184,8 @@ function MyCar({ route }: { route: NonNullable<ReturnType<typeof buildRoute>> })
 function Rig({ scrollRef }: { scrollRef: React.RefObject<number> }) {
   const { camera, pointer } = useThree();
   const look = useMemo(() => new THREE.Vector3(), []);
+  const camTarget = useMemo(() => new THREE.Vector3(), []);
+  const lookTarget = useMemo(() => new THREE.Vector3(), []);
   useFrame(({ clock }, dt) => {
     const t = clock.elapsedTime * 0.04;
     const sc = scrollRef.current ?? 0; // 0..1 enquanto o hero sai da tela
@@ -190,18 +193,20 @@ function Rig({ scrollRef }: { scrollRef: React.RefObject<number> }) {
     const tx = Math.sin(t) * r + pointer.x * 1.6;
     const tz = Math.cos(t) * r + pointer.y * 1.2;
     const ty = 12 + sc * 8 + pointer.y * 0.6;
-    camera.position.lerp(new THREE.Vector3(tx, ty, tz), Math.min(1, dt * 1.8));
-    look.lerp(new THREE.Vector3(0, 0, -1 - sc * 2), Math.min(1, dt * 2));
+    camera.position.lerp(camTarget.set(tx, ty, tz), Math.min(1, dt * 1.8));
+    look.lerp(lookTarget.set(0, 0, -1 - sc * 2), Math.min(1, dt * 2));
     camera.lookAt(look);
   });
   return null;
 }
 
-export default function HeroScene({ scrollRef }: { scrollRef: React.RefObject<number> }) {
+export default function HeroScene({ scrollRef, active = true }: { scrollRef: React.RefObject<number>; active?: boolean }) {
   const { w, route } = useWorld();
   return (
     <Canvas
-      dpr={[1, 1.75]}
+      // pausa a renderização quando o hero sai da tela
+      frameloop={active ? "always" : "never"}
+      dpr={[1, 1.5]}
       camera={{ position: [0, 12, 16], fov: 36, near: 0.1, far: 120 }}
       gl={{ antialias: true, powerPreference: "high-performance" }}
       onCreated={({ gl, scene }) => { gl.toneMapping = THREE.ACESFilmicToneMapping; scene.background = new THREE.Color("#07090b"); }}

@@ -73,7 +73,7 @@ export default function HowItWorks() {
 
         {/* "tela" da central multimídia */}
         <div className="hiw-screen relative">
-          <div className="absolute -inset-10 rounded-[48px] bg-[radial-gradient(closest-side,rgba(184,255,60,.12),transparent)]" />
+          <div className="pointer-events-none absolute -inset-3 rounded-[48px] sm:-inset-10 bg-[radial-gradient(closest-side,rgba(184,255,60,.12),transparent)]" />
           <div className="relative rounded-[28px] border border-white/10 bg-gradient-to-b from-[#1a1f26] to-[#0c0f13] p-3 shadow-[0_40px_120px_-30px_rgba(0,0,0,.9)]">
             <div className="relative aspect-[16/10] overflow-hidden rounded-[20px] bg-[#161a20]">
               <svg viewBox="0 0 640 400" className="absolute inset-0 h-full w-full" aria-label="Ilustração do navegador montando camadas">

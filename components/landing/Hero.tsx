@@ -7,7 +7,7 @@ import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { SplitText } from "gsap/SplitText";
 import { useGSAP } from "@gsap/react";
-import { motion } from "motion/react";
+import { motion, useInView } from "motion/react";
 import InstallButton from "@/components/pwa/InstallButton";
 
 gsap.registerPlugin(ScrollTrigger, SplitText, useGSAP);
@@ -17,6 +17,7 @@ const HeroScene = dynamic(() => import("./HeroScene"), { ssr: false });
 export default function Hero() {
   const root = useRef<HTMLElement>(null);
   const scroll = useRef(0);
+  const inView = useInView(root, { margin: "100px 0px" });
 
   useGSAP(() => {
     const split = SplitText.create(".hero-title", { type: "lines,words", mask: "lines" });
@@ -35,7 +36,7 @@ export default function Hero() {
 
   return (
     <section ref={root} className="grain relative h-[100svh] min-h-[640px] overflow-hidden bg-ink">
-      <div className="absolute inset-0"><HeroScene scrollRef={scroll} /></div>
+      <div className="absolute inset-0"><HeroScene scrollRef={scroll} active={inView} /></div>
       {/* vinheta para leitura do texto */}
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_80%_at_20%_80%,rgba(7,9,11,.92)_0%,rgba(7,9,11,.55)_45%,transparent_75%)]" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-ink to-transparent" />

@@ -153,7 +153,7 @@ export default function CarScene(props: Props) {
 
   return (
     <Canvas
-      shadows dpr={[1, 1.75]} frameloop={active ? "always" : "never"}
+      shadows dpr={[1, 1.5]} frameloop={active ? "always" : "never"}
       camera={{ position: ORBIT_POS.toArray(), fov: 36, near: 0.03, far: 80 }}
       gl={{ antialias: true }}
       onCreated={({ gl, scene }) => { gl.toneMapping = THREE.ACESFilmicToneMapping; scene.background = new THREE.Color("#0c1015"); scene.fog = new THREE.Fog("#0c1015", 9, 22); }}
@@ -181,7 +181,7 @@ export default function CarScene(props: Props) {
         <meshBasicMaterial color="#141a20" transparent opacity={0.9} />
       </mesh>
       <spotLight position={[0, 6, 0]} angle={0.6} penumbra={0.8} intensity={30} color="#dfe9f2" />
-      <ContactShadows position={[0, 0.002, 0]} opacity={0.7} scale={9} blur={2.4} far={2} resolution={512} color="#000" />
+      <ContactShadows position={[0, 0.002, 0]} opacity={0.7} scale={9} blur={2.4} far={2} resolution={512} color="#000" frames={1} />
       <Grid
         position={[0, 0, 0]} args={[40, 40]} cellSize={0.5} cellThickness={0.6} cellColor="#1a2027"
         sectionSize={2.5} sectionThickness={1} sectionColor="#24303a" fadeDistance={18} fadeStrength={1.5} infiniteGrid

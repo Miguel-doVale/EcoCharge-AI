@@ -40,8 +40,8 @@ export default function SiteNav() {
           <a href="#recursos" className="transition-colors hover:text-white">Recursos</a>
           <a href="#arquitetura" className="transition-colors hover:text-white">Arquitetura</a>
         </div>
-        <Link href="/navegador" className="inline-flex h-11 items-center rounded-full bg-white px-5 text-sm font-bold text-ink transition-colors hover:bg-volt">
-          Abrir navegador
+        <Link href="/navegador" className="inline-flex h-11 items-center whitespace-nowrap rounded-full bg-white px-5 text-sm font-bold text-ink transition-colors hover:bg-volt">
+          <span className="hidden sm:inline">Abrir navegador</span><span className="sm:hidden">Navegador</span>
         </Link>
       </nav>
     </motion.header>

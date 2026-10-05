@@ -123,9 +123,12 @@ function TopBar() {
       transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
     >
       <div className="flex items-stretch gap-2">
-        <Link href="/" aria-label="Voltar ao site" className="ui-card grid h-[50px] w-[50px] flex-none place-items-center rounded-full">
-          <BackIcon />
-        </Link>
+        {/* dentro da central do carro (iframe) não há "voltar ao site" */}
+        {window.self === window.top && (
+          <Link href="/" aria-label="Voltar ao site" className="ui-card grid h-[50px] w-[50px] flex-none place-items-center rounded-full">
+            <BackIcon />
+          </Link>
+        )}
         <label className="ui-card flex h-[50px] min-w-0 flex-1 items-center gap-2.5 rounded-full px-4">
           <SearchIcon className="flex-none text-[var(--ui-muted)]" />
           <input

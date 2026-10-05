@@ -7,7 +7,7 @@ import { motion, useInView, useScroll, useTransform } from "motion/react";
 const Spline = dynamic(() => import("@splinetool/react-spline"), { ssr: false });
 
 // Troque pela URL da sua cena publicada no Spline (Export → Code → React).
-const SCENE = process.env.NEXT_PUBLIC_SPLINE_SCENE || "https://prod.spline.design/6Wq1Q7YGyM-iab9i/scene.splinecode";
+const SCENE = process.env.NEXT_PUBLIC_SPLINE_SCENE!;
 
 const CALLOUTS = [
   { t: "Painel lateral em telas largas", d: "Lista e card à esquerda, mapa livre à direita, como na central multimídia.", pos: "left-4 top-6 sm:left-8 sm:top-10" },

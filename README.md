@@ -16,7 +16,7 @@ npm run build      # build de produção
 
 | Rota          | O que é                                                                 |
 | ------------- | ----------------------------------------------------------------------- |
-| `/`           | Landing: hero 3D, "como funciona" com scroll fixado, Spline, recursos  |
+| `/`           | Landing: hero 3D, "como funciona" com scroll fixado, carro 3D, recursos |
 | `/navegador`  | O navegador EV em tela cheia                                            |
 
 ## Onde cada biblioteca é usada
@@ -27,7 +27,8 @@ npm run build      # build de produção
 | **GSAP** | Título com SplitText e parallax do hero (`Hero.tsx`), seção fixada que monta o mapa camada por camada (`HowItWorks.tsx`), linha da arquitetura (`Architecture.tsx`), inclinação 3D do mapa ao navegar e ícone de curva (`components/nav/Navigator.tsx`) |
 | **Lenis** | `components/landing/SmoothScroll.tsx`: scroll suave sincronizado com o ticker do GSAP |
 | **Motion** | Painel inferior arrastável, transição entre telas do painel, lista que se reordena ao vivo, números animados, gráfico de ocupação, anel de recarga, toasts, contadores, bento e botão magnético |
-| **Spline** | `components/landing/SplineStage.tsx`, carregado só quando a seção entra na tela |
+| **Three.js (carro)** | `components/landing/car/`: hatch elétrico 3D com porta clicável. A câmera entra pela porta, senta no banco e para de frente para a central, onde o navegador real (`/navegador`) roda num iframe |
+| **Spline** | `components/landing/SplineStage.tsx`: opcional. Só aparece no lugar do carro se `NEXT_PUBLIC_SPLINE_SCENE` estiver definida |
 
 ## Navegador: o que faz
 
@@ -67,11 +68,8 @@ lib/ev/
 - **Cores do mapa:** `PALETA_DIA` / `PALETA_NOITE`. **Cores de status:** `COR_STATUS`.
 - **Nomes de ruas, postos e operadoras:** listas no fim de `config.ts`.
 - **Cidade diferente:** troque `CFG.seed`.
-- **Cena do Spline:** a cena atual é o exemplo público da documentação do Spline (um cubo). Publique a sua cena (por exemplo, um painel BYD ou um carregador) em Spline → Export → Code → React, copie a URL `.splinecode` e crie um `.env.local`:
-
-  ```
-  NEXT_PUBLIC_SPLINE_SCENE=https://prod.spline.design/SEU_ID/scene.splinecode
-  ```
+- **Carro 3D:** formas, cores e posições em `components/landing/car/CarModel.tsx` (`CAR` guarda dobradiça da porta, posição da tela e do olho do motorista). Cores da pintura: `#eef1f0` (cima) e `uLower` (baixo). Câmera e animação de entrada/saída: `components/landing/car/CarScene.tsx`.
+- **Spline (opcional):** se um dia houver uma cena publicada, crie `.env.local` com `NEXT_PUBLIC_SPLINE_SCENE=https://prod.spline.design/SEU_ID/scene.splinecode` e a seção passa a usar o Spline no lugar do carro.
 
 ## Limitação e caminho para produção
 

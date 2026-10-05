@@ -9,6 +9,8 @@ export const metadata: Metadata = {
   title: "EcoCharge AI — navegação para carros elétricos",
   description:
     "Navegador automotivo especializado em EVs: carregadores com disponibilidade ao vivo, conectores livres e ocupados, rota até o posto e recarga.",
+  applicationName: "EcoCharge",
+  appleWebApp: { capable: true, title: "EcoCharge", statusBarStyle: "black-translucent" },
 };
 
 export const viewport: Viewport = {

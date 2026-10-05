@@ -10,6 +10,7 @@ import { COR_STATUS } from "@/lib/ev/config";
 import { EngineContext, useEngine, useUI } from "./engine-context";
 import { BackIcon, CarIcon, LocateIcon, MinusIcon, MoonIcon, PlusIcon, SearchIcon, SunIcon, TurnGlyph } from "./icons";
 import { SheetContent } from "./SheetViews";
+import { isStandalone, registerSW } from "@/components/pwa/PWAProvider";
 
 gsap.registerPlugin(useGSAP);
 
@@ -55,6 +56,7 @@ function NavigatorShell() {
       return { l: 0, t: tb ? tb.bottom : 0, r: 60, b: ch - sh.top };
     });
     engine.attach(cv);
+    registerSW();
     return () => engine.detach();
   }, [engine]);
 
@@ -123,8 +125,8 @@ function TopBar() {
       transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
     >
       <div className="flex items-stretch gap-2">
-        {/* dentro da central do carro (iframe) não há "voltar ao site" */}
-        {window.self === window.top && (
+        {/* sem "voltar ao site" dentro da central do carro (iframe) nem no app instalado */}
+        {window.self === window.top && !isStandalone() && (
           <Link href="/" aria-label="Voltar ao site" className="ui-card grid h-[50px] w-[50px] flex-none place-items-center rounded-full">
             <BackIcon />
           </Link>

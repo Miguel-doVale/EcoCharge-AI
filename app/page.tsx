@@ -1,4 +1,5 @@
 import SmoothScroll from "@/components/landing/SmoothScroll";
+import PWAProvider from "@/components/pwa/PWAProvider";
 import SiteNav from "@/components/landing/SiteNav";
 import Hero from "@/components/landing/Hero";
 import LiveTicker from "@/components/landing/LiveTicker";
@@ -11,6 +12,7 @@ import FinalCTA from "@/components/landing/FinalCTA";
 
 export default function Home() {
   return (
+    <PWAProvider>
     <SmoothScroll>
       <SiteNav />
       <main>
@@ -24,5 +26,6 @@ export default function Home() {
         <FinalCTA />
       </main>
     </SmoothScroll>
+    </PWAProvider>
   );
 }

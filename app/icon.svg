@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#161b21"/>
+      <stop offset="1" stop-color="#07090b"/>
+    </linearGradient>
+    <linearGradient id="pin" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d4ff7a"/>
+      <stop offset="1" stop-color="#9be01f"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#bg)"/>
+  <!-- pino de mapa -->
+  <path d="M32 7c-10.5 0-18.5 8-18.5 18.2C13.5 38.4 32 57 32 57s18.5-18.6 18.5-31.8C50.5 15 42.5 7 32 7z" fill="url(#pin)"/>
+  <!-- raio -->
+  <path d="M35.2 13.5 23.5 29.2h7.6L28.6 40l12-16.3h-7.7z" fill="#07090b"/>
+</svg>

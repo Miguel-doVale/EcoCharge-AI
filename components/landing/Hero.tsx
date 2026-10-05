@@ -8,6 +8,7 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { SplitText } from "gsap/SplitText";
 import { useGSAP } from "@gsap/react";
 import { motion } from "motion/react";
+import InstallButton from "@/components/pwa/InstallButton";
 
 gsap.registerPlugin(ScrollTrigger, SplitText, useGSAP);
 
@@ -56,6 +57,7 @@ export default function Hero() {
               Abrir navegador
               <span className="grid h-10 w-10 place-items-center rounded-full bg-ink text-volt transition-transform duration-500 ease-out-expo group-hover:translate-x-1 group-hover:-rotate-45">→</span>
             </Link>
+            <InstallButton />
             <a href="#como-funciona" className="inline-flex h-14 items-center rounded-full border border-white/15 px-6 text-base font-semibold text-white transition-colors hover:border-white/40">
               Como funciona
             </a>

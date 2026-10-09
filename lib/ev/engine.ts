@@ -1,18 +1,19 @@
 /* =========================================================
    ENGINE DO NAVEGADOR
-   Mantém o estado da simulação, desenha o mapa no canvas e
-   expõe um store (useSyncExternalStore) para a UI em React.
+   Mapa real (MapLibre + OpenFreeMap/OpenStreetMap) com uma camada
+   própria em canvas por cima: carregadores, EVs, carro e rota.
+   Mantém o estado da simulação e expõe um store (useSyncExternalStore)
+   para a UI em React.
    ========================================================= */
-import { CFG, COR_STATUS, NOME_PARQUE, NOME_RIO, PALETA_DIA, PALETA_NOITE, type Palette } from "./config";
-import {
-  B, COLS, PARK, RIVER_HALF, ROWS, buildRoute, clamp, createWorld, dijkstra, dist, level, riverY,
-  stats, stepEV, type Charger, type Connector, type Pt, type Reach, type Route, type World,
-} from "./world";
+import * as maplibregl from "maplibre-gl";
+import { CFG, COR_STATUS, PALETA_DIA, PALETA_NOITE, type Palette } from "./config";
+import { clamp, dist, level, stats, type Charger, type Connector, type Pt } from "./world";
+import { buildRoute, createRealWorld, dijkstra, stepEV, type Reach, type RealEV, type RealWorld, type RoadData, type Route } from "./realworld";
 import { clock, fmtDist, fmtMin } from "./format";
 
 export type Mode = "list" | "detail" | "preview" | "nav" | "arrived" | "charging";
 export type Filter = "livres" | "rapido" | "ccs2" | "tipo2";
-export type TurnIcon = "direita" | "esquerda" | "reto" | "chegada";
+export type TurnIcon = "direita" | "esquerda" | "retorno" | "reto" | "chegada";
 
 export type NavInfo = {
   dist: string; instr: string; street: string; icon: TurnIcon;
@@ -36,18 +37,24 @@ export type UIState = {
   charge: ChargeInfo | null;
   reservation: Reservation | null;
   toast: { id: number; msg: string } | null;
-  zoom: number;
 };
 
 export type Insets = { l: number; t: number; r: number; b: number };
+
+/* estilos de mapa (OpenFreeMap: tiles vetoriais do OpenStreetMap, sem chave) */
+const STYLE_DIA = "https://tiles.openfreemap.org/styles/liberty";
+const STYLE_NOITE = "https://tiles.openfreemap.org/styles/dark";
+const NAV_PITCH = 55;
+// worker servido de public/ (copiado por scripts/copy-maplibre-worker.mjs)
+if (typeof window !== "undefined") maplibregl.setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
+const EARTH = 40075016.686;
 
 const BOLT = typeof Path2D !== "undefined" ? new Path2D("M2.2-6 -3.4 1H0L-1.8 6.4 3.6-.8H0z") : null;
 const FONT = '"Hanken Grotesk", system-ui, sans-serif';
 
 export class EVEngine {
-  w: World;
+  w: RealWorld;
   car: Pt & { h: number; batt: number; node: number };
-  cam: { x: number; y: number; s: number };
   reach: Reach;
   route: Route | null = null;
   navState: { d: number; seg: number; lastD: number } | null = null;
@@ -56,35 +63,32 @@ export class EVEngine {
 
   private state: UIState;
   private listeners = new Set<() => void>();
+  private map: maplibregl.Map | null = null;
   private canvas: HTMLCanvasElement | null = null;
   private ctx: CanvasRenderingContext2D | null = null;
   private cw = 0; private ch = 0; private dpr = 1;
   private raf = 0; private last = 0;
-  private anim: { from: { x: number; y: number; s: number }; to: { x: number; y: number; s: number }; t0: number; dur: number } | null = null;
-  private inertia: { vx: number; vy: number } | null = null;
-  private evDrawn: ({ cluster: true; x: number; y: number; r: number; n: number } | { cluster: false; ev: World["evs"][number]; x: number; y: number; r: number })[] = [];
+  private evDrawn: ({ cluster: true; x: number; y: number; r: number; n: number } | { cluster: false; ev: RealEV; x: number; y: number; r: number })[] = [];
   private bump = new Map<number, number>(); // id -> instante da última mudança (anima o marcador)
   private lastFree = new Map<number, number>();
   private liveTimer: ReturnType<typeof setInterval> | null = null;
   private navEmitT = 0;
+  private navCamAt = 0; // até quando a câmera de navegação ainda está animando
   private toastId = 0;
-  private flatPaths: { park: Path2D; bldg: Path2D; river: Path2D; minor: Path2D; major: Path2D } | null = null;
   private insetsProvider: () => Insets = () => ({ l: 0, t: 0, r: 0, b: 0 });
+  private lastInsetB = -1;
   private cleanup: (() => void)[] = [];
-  tilted = false;
 
-  constructor() {
-    this.w = createWorld();
-    const start = this.w.nid(13, 8);
+  constructor(data: RoadData) {
+    this.w = createRealWorld(data);
+    const start = this.w.nearestNode(this.w.start);
     const n = this.w.nodes[start];
     this.car = { x: n.x, y: n.y, h: -Math.PI / 2, batt: CFG.veiculo.bateriaInicial, node: start };
-    this.cam = { x: n.x, y: n.y, s: CFG.zoomInicial };
     this.reach = dijkstra(this.w, start);
     for (const c of this.w.chargers) this.lastFree.set(c.id, stats(c).free);
     this.state = {
       mode: "list", selId: null, filters: [], query: "", showEV: true, follow: true, dark: false,
-      batt: this.car.batt, range: this.rangeKm(), rev: 0, nav: null, charge: null, reservation: null,
-      toast: null, zoom: this.cam.s,
+      batt: this.car.batt, range: this.rangeKm(), rev: 0, nav: null, charge: null, reservation: null, toast: null,
     };
   }
 
@@ -116,29 +120,52 @@ export class EVEngine {
   }
 
   /* ---------------- ciclo de vida ---------------- */
-  attach(canvas: HTMLCanvasElement) {
+  attach(container: HTMLDivElement, canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d");
     this.reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    this.buildFlatPaths();
-    const onResize = () => this.resize();
-    addEventListener("resize", onResize); this.resize();
-    this.cleanup.push(() => removeEventListener("resize", onResize));
-    this.bindInput(canvas);
     let dark = matchMedia("(prefers-color-scheme: dark)").matches;
     try { const s = localStorage.getItem("evnav-theme"); if (s) dark = s === "dark"; } catch {}
+
+    const [s, w, n, e] = this.w.bbox, padLat = 0.12, padLon = 0.14;
+    const map = new maplibregl.Map({
+      container,
+      style: dark ? STYLE_NOITE : STYLE_DIA,
+      center: this.w.toLngLat(this.car),
+      zoom: this.zoomFor(CFG.zoomInicial),
+      minZoom: 11, maxZoom: 19, maxPitch: 65,
+      // a simulação cobre só a região; o mapa deixa explorar a ilha em volta
+      maxBounds: [[w - padLon, s - padLat], [e + padLon, n + padLat]],
+      attributionControl: false,
+      dragRotate: false, pitchWithRotate: false, touchPitch: false,
+      fadeDuration: this.reduceMotion ? 0 : 300,
+    });
+    map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
+    map.touchZoomRotate.disableRotation();
+    this.map = map;
+
+    const userMove = (ev: { originalEvent?: unknown }) => { if (ev.originalEvent) this.setFollow(false); };
+    map.on("dragstart", userMove); map.on("zoomstart", userMove);
+    map.on("click", (ev) => this.tap(ev.point.x, ev.point.y));
+    map.on("mousemove", (ev) => { map.getCanvas().style.cursor = this.hit(ev.point.x, ev.point.y) ? "pointer" : ""; });
+    map.on("load", () => this.flyTo(this.car, CFG.zoomInicial, 0));
+
+    const ro = new ResizeObserver(() => { this.resize(); map.resize(); });
+    ro.observe(container); this.resize();
+    const key = (ev: KeyboardEvent) => { if (ev.key === "Escape" && this.state.mode === "detail") this.closeDetail(); };
+    addEventListener("keydown", key);
+    this.cleanup.push(() => { ro.disconnect(); removeEventListener("keydown", key); });
+
     this.applyTheme(dark);
     this.liveTimer = setInterval(() => this.tickLive(), CFG.intervaloAoVivo);
-    requestAnimationFrame(() => {
-      Object.assign(this.cam, this.camFor(this.car, CFG.zoomInicial));
-      this.last = performance.now();
-      this.raf = requestAnimationFrame(this.frame);
-    });
+    this.last = performance.now();
+    this.raf = requestAnimationFrame(this.frame);
   }
   detach() {
     cancelAnimationFrame(this.raf);
     if (this.liveTimer) clearInterval(this.liveTimer);
     this.cleanup.forEach((f) => f()); this.cleanup = [];
+    this.map?.remove(); this.map = null;
     this.canvas = null; this.ctx = null;
   }
   setInsetsProvider(fn: () => Insets) { this.insetsProvider = fn; }
@@ -151,35 +178,36 @@ export class EVEngine {
     this.canvas.width = this.cw * this.dpr; this.canvas.height = this.ch * this.dpr;
   }
 
-  /* ---------------- câmera ---------------- */
-  toScreen = (p: Pt) => ({ x: (p.x - this.cam.x) * this.cam.s + this.cw / 2, y: (p.y - this.cam.y) * this.cam.s + this.ch / 2 });
-  toWorld = (x: number, y: number) => ({ x: (x - this.cw / 2) / this.cam.s + this.cam.x, y: (y - this.ch / 2) / this.cam.s + this.cam.y });
-  viewCenter() { const i = this.insetsProvider(); return { x: (i.l + this.cw - i.r) / 2, y: (i.t + this.ch - i.b) / 2 }; }
-  camFor(p: Pt, s: number) { const vc = this.viewCenter(); return { x: p.x - (vc.x - this.cw / 2) / s, y: p.y - (vc.y - this.ch / 2) / s, s }; }
-  flyTo(p: Pt, s = this.cam.s, dur = 650) {
-    const to = this.camFor(p, clamp(s, CFG.zoomMin, CFG.zoomMax));
-    if (this.reduceMotion || !dur) { Object.assign(this.cam, to); return; }
-    this.anim = { from: { ...this.cam }, to, t0: performance.now(), dur }; this.inertia = null;
+  /* ---------------- câmera ----------------
+     A escala "s" (pixels por metro) é a unidade usada no CFG; o MapLibre usa zoom. */
+  private cosLat() { return Math.cos((this.w.toLngLat(this.car)[1] * Math.PI) / 180); }
+  zoomFor(s: number) { return Math.log2((s * EARTH * this.cosLat()) / 512); }
+  get scale() { return this.map ? (512 * 2 ** this.map.getZoom()) / (EARTH * this.cosLat()) : CFG.zoomInicial; }
+  toScreen = (p: Pt) => { const q = this.map!.project(this.w.toLngLat(p)); return { x: q.x, y: q.y }; };
+  private padding() { const i = this.insetsProvider(); return { left: i.l, top: i.t, right: i.r, bottom: i.b }; }
+  private dur(ms: number) { return this.reduceMotion ? 0 : ms; }
+  private bearingOf(h: number) { return (h * 180) / Math.PI + 90; }
+
+  flyTo(p: Pt, s = this.scale, dur = 650) {
+    this.map?.easeTo({ center: this.w.toLngLat(p), zoom: this.zoomFor(clamp(s, CFG.zoomMin, CFG.zoomMax)), padding: this.padding(), duration: this.dur(dur) });
   }
   fitPoints(pts: Pt[], pad = 60) {
-    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-    for (const p of pts) { x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y); }
-    const i = this.insetsProvider(), w = this.cw - i.l - i.r - pad * 2, h = this.ch - i.t - i.b - pad * 2;
-    const s = clamp(Math.min(w / Math.max(x1 - x0, 80), h / Math.max(y1 - y0, 80)), CFG.zoomMin, 1.6);
-    this.flyTo({ x: (x0 + x1) / 2, y: (y0 + y1) / 2 }, s);
+    if (!this.map) return;
+    const b = new maplibregl.LngLatBounds();
+    for (const p of pts) b.extend(this.w.toLngLat(p));
+    const i = this.insetsProvider();
+    this.map.fitBounds(b, { padding: { left: i.l + pad, top: i.t + pad, right: i.r + pad, bottom: i.b + pad }, maxZoom: this.zoomFor(1.6), duration: this.dur(700) });
   }
-  zoomAt(sx: number, sy: number, f: number) {
-    const w = this.toWorld(sx, sy);
-    this.cam.s = clamp(this.cam.s * f, CFG.zoomMin, CFG.zoomMax);
-    this.cam.x = w.x - (sx - this.cw / 2) / this.cam.s; this.cam.y = w.y - (sy - this.ch / 2) / this.cam.s;
-    this.anim = null;
-  }
-  zoomBy(f: number) {
-    const vc = this.viewCenter(), w = this.toWorld(vc.x, vc.y);
-    this.flyTo(w, this.cam.s * f, 320);
-  }
-  private clampCam() { this.cam.x = clamp(this.cam.x, -500, COLS * B + 500); this.cam.y = clamp(this.cam.y, -500, ROWS * B + 500); }
+  zoomBy(f: number) { const m = this.map; if (m) m.easeTo({ zoom: m.getZoom() + Math.log2(f), duration: this.dur(320) }); }
   private setFollow(v: boolean) { if (this.state.follow !== v) this.set({ follow: v }); }
+  private navCamera(dur: number) {
+    this.navCamAt = performance.now() + dur;
+    this.map?.easeTo({
+      center: this.w.toLngLat(this.car), zoom: this.zoomFor(CFG.zoomNavegacao), pitch: NAV_PITCH,
+      bearing: this.bearingOf(this.car.h), padding: this.padding(), duration: this.dur(dur),
+    });
+  }
+  private flatCamera() { this.map?.easeTo({ pitch: 0, bearing: 0, padding: this.padding(), duration: this.dur(900) }); }
 
   /* ---------------- ações (chamadas pela UI) ---------------- */
   toast(msg: string) { this.set({ toast: { id: ++this.toastId, msg } }); }
@@ -191,7 +219,7 @@ export class EVEngine {
     this.route = null; this.navState = null;
     this.set({ selId: id, mode: "detail", nav: null });
     const c = this.w.chargers[id];
-    if (fly) this.flyTo(c.pos, Math.max(this.cam.s, 0.95));
+    if (fly) requestAnimationFrame(() => this.flyTo(c.pos, Math.max(this.scale, 0.95)));
   }
   closeDetail() {
     if (this.state.mode === "charging") return;
@@ -213,15 +241,22 @@ export class EVEngine {
   startNav() {
     if (!this.route) return;
     this.navState = { d: 0, seg: 0, lastD: 0 };
+    const r = this.route;
+    if (r.pts.length > 1) this.car.h = Math.atan2(r.pts[1].y - r.pts[0].y, r.pts[1].x - r.pts[0].x);
     this.set({ mode: "nav", follow: true });
-    this.flyTo(this.car, CFG.zoomNavegacao, 500);
+    // a UI troca o painel neste quadro; o recuo (padding) da câmera usa o layout novo
+    requestAnimationFrame(() => this.navCamera(1100));
     this.emitNav(true);
   }
   cancelRoute() {
+    const wasNav = this.state.mode === "nav";
     this.route = null; this.navState = null;
     const sel = this.selected;
     this.set({ mode: sel ? "detail" : "list", nav: null });
-    if (sel) this.flyTo(sel.pos, Math.max(this.cam.s, 0.9));
+    requestAnimationFrame(() => {
+      if (wasNav) this.flatCamera();
+      if (sel) this.flyTo(sel.pos, Math.max(this.scale, 0.9));
+    });
   }
   reserve(n: number) {
     const c = this.selected; if (!c) return;
@@ -272,11 +307,15 @@ export class EVEngine {
     this.P = dark ? PALETA_NOITE : PALETA_DIA;
     document.documentElement.dataset.theme = dark ? "dark" : "light";
     try { localStorage.setItem("evnav-theme", dark ? "dark" : "light"); } catch {}
+    if (this.map && this.state.dark !== dark) this.map.setStyle(dark ? STYLE_NOITE : STYLE_DIA, { diff: false });
     this.set({ dark });
   }
   toggleTheme() { this.applyTheme(!this.state.dark); }
-  locate() { this.setFollow(true); this.flyTo(this.car, Math.max(this.cam.s, this.state.mode === "nav" ? CFG.zoomNavegacao : 0.9)); }
-  setTilted(v: boolean) { this.tilted = v; }
+  locate() {
+    this.setFollow(true);
+    if (this.state.mode === "nav") this.navCamera(600);
+    else this.flyTo(this.car, Math.max(this.scale, 0.9));
+  }
 
   /* ---------------- simulação ---------------- */
   private tickLive() {
@@ -307,18 +346,18 @@ export class EVEngine {
     const a = r.pts[n.seg], b = r.pts[n.seg + 1] || a, segLen = Math.max(1e-6, dist(a, b));
     const t = clamp((n.d - r.cum[n.seg]) / segLen, 0, 1);
     car.x = a.x + (b.x - a.x) * t; car.y = a.y + (b.y - a.y) * t;
-    const target = Math.atan2(b.y - a.y, b.x - a.x);
-    let dh = target - car.h;
-    while (dh > Math.PI) dh -= 2 * Math.PI;
-    while (dh < -Math.PI) dh += 2 * Math.PI;
-    car.h += dh * Math.min(1, dt * 8);
+    if (segLen > 0.5) {
+      const target = Math.atan2(b.y - a.y, b.x - a.x);
+      let dh = target - car.h;
+      while (dh > Math.PI) dh -= 2 * Math.PI;
+      while (dh < -Math.PI) dh += 2 * Math.PI;
+      car.h += dh * Math.min(1, dt * 4);
+    }
     car.batt = Math.max(0, car.batt - ((n.d - n.lastD) / 1000) * CFG.veiculo.consumoKWhKm / CFG.veiculo.bateriaKWh * 100);
     n.lastD = n.d;
-    if (this.state.follow) {
-      const tc = this.camFor(car, this.cam.s);
-      this.cam.x += (tc.x - this.cam.x) * Math.min(1, dt * 5);
-      this.cam.y += (tc.y - this.cam.y) * Math.min(1, dt * 5);
-    }
+    // câmera de navegação: segue e gira com o carro
+    if (this.state.follow && this.map && performance.now() > this.navCamAt)
+      this.map.jumpTo({ center: this.w.toLngLat(car), bearing: this.bearingOf(car.h), padding: this.padding() });
     if (n.d >= r.total) this.arrive(); else this.emitNav();
   }
   private emitNav(force = false) {
@@ -330,7 +369,8 @@ export class EVEngine {
     const toStep = step.at - n.d, rem = r.total - n.d;
     let instr: string, street: string, icon: TurnIcon;
     if (step.dir === "chegada") { instr = "Destino à frente"; street = step.street || ""; icon = "chegada"; }
-    else if (toStep > 600) { instr = "Siga em frente"; street = `depois, vire à ${step.dir}`; icon = "reto"; }
+    else if (toStep > 600) { instr = "Siga em frente"; street = step.dir === "retorno" ? "depois, faça o retorno" : `depois, vire à ${step.dir}`; icon = "reto"; }
+    else if (step.dir === "retorno") { instr = "Faça o retorno"; street = step.street ? `na ${step.street}` : ""; icon = "retorno"; }
     else { instr = `Vire à ${step.dir}`; street = step.street ? `na ${step.street}` : ""; icon = step.dir; }
     this.set({
       nav: {
@@ -345,7 +385,11 @@ export class EVEngine {
     this.reach = dijkstra(this.w, this.car.node);
     this.route = null; this.navState = null;
     this.set({ mode: "arrived", nav: null });
-    const sel = this.selected; if (sel) this.flyTo(sel.pos, 1.5);
+    const sel = this.selected;
+    requestAnimationFrame(() => {
+      this.flatCamera();
+      if (sel) this.flyTo(sel.pos, 1.5, 900);
+    });
   }
   private stepCharge(dt: number) {
     const cs = this.chargeStart; if (!cs || this.car.batt >= 100) return;
@@ -375,165 +419,45 @@ export class EVEngine {
     for (const c of this.w.evs) stepEV(this.w, c, dt);
     if (this.state.mode === "nav" && this.navState) this.stepNav(dt);
     if (this.state.mode === "charging") this.stepCharge(dt);
-    const a = this.anim;
-    if (a) {
-      const k = clamp((now - a.t0) / a.dur, 0, 1), e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
-      this.cam.s = Math.exp(Math.log(a.from.s) + (Math.log(a.to.s) - Math.log(a.from.s)) * e);
-      this.cam.x = a.from.x + (a.to.x - a.from.x) * e; this.cam.y = a.from.y + (a.to.y - a.from.y) * e;
-      if (k >= 1) this.anim = null;
-    }
-    const i = this.inertia;
-    if (i) {
-      this.cam.x -= (i.vx * 16) / this.cam.s; this.cam.y -= (i.vy * 16) / this.cam.s;
-      i.vx *= 0.92; i.vy *= 0.92; this.clampCam();
-      if (Math.hypot(i.vx, i.vy) < 0.02) this.inertia = null;
-    }
-    if (Math.abs(this.state.zoom - this.cam.s) > 0.02) this.set({ zoom: this.cam.s });
+    // a atribuição do mapa sobe junto com o painel inferior (celular)
+    const ib = Math.round(this.insetsProvider().b);
+    if (ib !== this.lastInsetB && this.map) { this.lastInsetB = ib; this.map.getContainer().style.setProperty("--map-inset-b", ib + "px"); }
     this.draw(now);
     this.raf = requestAnimationFrame(this.frame);
   };
 
-  /* ---------------- desenho ---------------- */
-  private buildFlatPaths() {
-    const { w } = this;
-    const park = new Path2D(), bldg = new Path2D(), river = new Path2D(), minor = new Path2D(), major = new Path2D();
-    for (const b of w.blocks) {
-      if (b.type === "urban") continue;
-      park.moveTo(b.q[0].x, b.q[0].y); for (let k = 1; k < 4; k++) park.lineTo(b.q[k].x, b.q[k].y); park.closePath();
-    }
-    for (const b of w.buildings) { bldg.moveTo(b.c[0].x, b.c[0].y); for (let k = 1; k < 4; k++) bldg.lineTo(b.c[k].x, b.c[k].y); bldg.closePath(); }
-    const x0 = -600, x1 = COLS * B + 600;
-    river.moveTo(x0, riverY(x0) - RIVER_HALF);
-    for (let x = x0; x <= x1; x += 20) river.lineTo(x, riverY(x) - RIVER_HALF);
-    for (let x = x1; x >= x0; x -= 20) river.lineTo(x, riverY(x) + RIVER_HALF);
-    river.closePath();
-    for (const e of w.edges) { const p = e.major ? major : minor, a = w.nodes[e.a], b = w.nodes[e.b]; p.moveTo(a.x, a.y); p.lineTo(b.x, b.y); }
-    this.flatPaths = { park, bldg, river, minor, major };
-  }
-  private setWorld() { const { ctx, cam, dpr, cw, ch } = this; const s = cam.s * dpr; ctx!.setTransform(s, 0, 0, s, dpr * (cw / 2 - cam.x * cam.s), dpr * (ch / 2 - cam.y * cam.s)); }
-  private setScreen() { this.ctx!.setTransform(this.dpr, 0, 0, this.dpr, 0, 0); }
-  private strokeRoads(path: Path2D, px: number, color: string) { const c = this.ctx!; c.lineWidth = px / this.cam.s; c.strokeStyle = color; c.stroke(path); }
-
+  /* ---------------- desenho (camada própria sobre o mapa) ---------------- */
   private draw(now: number) {
-    if (!this.ctx || !this.flatPaths) return;
-    this.drawMap();
-    this.setScreen();
+    const ctx = this.ctx; if (!ctx || !this.map) return;
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.clearRect(0, 0, this.cw, this.ch);
+    this.drawRoute(now);
     this.drawEVs();
     this.drawChargers(now);
     this.drawCar(now);
   }
+  private onScreen(p: Pt, m = 40) { return p.x > -m && p.x < this.cw + m && p.y > -m && p.y < this.ch + m; }
+  /** direção na tela de um rumo h no mapa (considera giro e inclinação) */
+  private screenAngle(p: Pt, h: number, sp: Pt) {
+    const q = this.toScreen({ x: p.x + Math.cos(h) * 8, y: p.y + Math.sin(h) * 8 });
+    return Math.atan2(q.y - sp.y, q.x - sp.x);
+  }
 
-  private drawMap() {
-    const ctx = this.ctx!, P = this.P, s = this.cam.s, fp = this.flatPaths!;
-    this.setScreen(); ctx.fillStyle = P.land; ctx.fillRect(0, 0, this.cw, this.ch);
-    this.setWorld();
-    ctx.fillStyle = P.park; ctx.fill(fp.park);
-    ctx.fillStyle = P.water; ctx.fill(fp.river);
-    const flatBldg = s > 0.34 && s < 1.05;
-    if (flatBldg) {
-      ctx.globalAlpha = clamp((s - 0.34) / 0.3, 0, 1);
-      ctx.fillStyle = P.bldg; ctx.fill(fp.bldg); ctx.lineWidth = 1 / s; ctx.strokeStyle = P.bldgEdge; ctx.stroke(fp.bldg);
-      ctx.globalAlpha = 1;
-    }
+  private drawRoute(now: number) {
+    const r = this.route; if (!r) return;
+    const ctx = this.ctx!, P = this.P, n = this.navState;
+    const path = new Path2D();
+    const start = n ? n.seg + 1 : 1, p0 = this.toScreen(n ? this.car : r.pts[0]);
+    path.moveTo(p0.x, p0.y);
+    for (let k = start; k < r.pts.length; k++) { const p = this.toScreen(r.pts[k]); path.lineTo(p.x, p.y); }
     ctx.lineCap = "round"; ctx.lineJoin = "round";
-    const minorPx = Math.max(1.2, 10 * s), majorPx = Math.max(2.6, 17 * s);
-    const mAlpha = clamp((s - 0.16) / 0.18, 0, 1);
-    if (mAlpha > 0) { ctx.globalAlpha = mAlpha; this.strokeRoads(fp.minor, minorPx + 2, P.minorCase); ctx.globalAlpha = 1; }
-    this.strokeRoads(fp.major, majorPx + 2.4, P.majorCase);
-    if (mAlpha > 0) { ctx.globalAlpha = mAlpha; this.strokeRoads(fp.minor, minorPx, P.minor); ctx.globalAlpha = 1; }
-    this.strokeRoads(fp.major, majorPx, P.major);
-    if (this.route) {
-      const r = this.route, n = this.navState;
-      const rp = new Path2D();
-      if (n) { rp.moveTo(this.car.x, this.car.y); for (let k = n.seg + 1; k < r.pts.length; k++) rp.lineTo(r.pts[k].x, r.pts[k].y); }
-      else { rp.moveTo(r.pts[0].x, r.pts[0].y); for (let k = 1; k < r.pts.length; k++) rp.lineTo(r.pts[k].x, r.pts[k].y); }
-      const rpx = Math.max(6, 12 * s);
-      this.strokeRoads(rp, rpx + 3, P.routeCase); this.strokeRoads(rp, rpx, P.route);
-      // setas de direção sobre a rota
-      if (s > 0.5) {
-        ctx.setLineDash([2 / s, 34 / s]); ctx.lineDashOffset = -(performance.now() / 30) / s;
-        this.strokeRoads(rp, Math.max(2.5, 4 * s), "rgba(255,255,255,.85)");
-        ctx.setLineDash([]); ctx.lineDashOffset = 0;
-      }
-    }
-    this.setScreen();
-    if (s >= 1.05) this.drawBuildings3D();
-    this.drawLabels();
-  }
-
-  /** prédios 2.5D (extrusão oblíqua) quando o zoom está próximo */
-  private drawBuildings3D() {
-    const ctx = this.ctx!, P = this.P, s = this.cam.s;
-    const alpha = clamp((s - 1.05) / 0.25, 0, 1);
-    const k = 0.55 * s; // px de altura por metro
-    const vis: { pts: Pt[]; h: number; y: number }[] = [];
-    for (const b of this.w.buildings) {
-      const c0 = this.toScreen(b.c[0]);
-      if (c0.x < -120 || c0.x > this.cw + 120 || c0.y < -200 || c0.y > this.ch + 120) continue;
-      vis.push({ pts: b.c.map(this.toScreen), h: b.h * k * 0.6, y: c0.y });
-    }
-    vis.sort((a, b) => a.y - b.y);
-    ctx.globalAlpha = alpha;
-    ctx.lineJoin = "round";
-    for (const v of vis) {
-      const top = v.pts.map((p) => ({ x: p.x, y: p.y - v.h }));
-      // paredes visíveis: as que apontam para baixo na tela
-      for (let i = 0; i < 4; i++) {
-        const a = v.pts[i], b = v.pts[(i + 1) % 4];
-        // normal externa (polígono horário em tela, y para baixo) = (dy, -dx);
-        // a extrusão é para cima, então só as faces voltadas para baixo aparecem
-        if (-(b.x - a.x) <= 0) continue;
-        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.lineTo(top[(i + 1) % 4].x, top[(i + 1) % 4].y); ctx.lineTo(top[i].x, top[i].y); ctx.closePath();
-        ctx.fillStyle = P.bldgWall; ctx.fill();
-      }
-      ctx.beginPath(); ctx.moveTo(top[0].x, top[0].y); for (let i = 1; i < 4; i++) ctx.lineTo(top[i].x, top[i].y); ctx.closePath();
-      ctx.fillStyle = P.bldgTop; ctx.fill(); ctx.lineWidth = 1; ctx.strokeStyle = P.bldgEdge; ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
-  }
-
-  private labelText(text: string, x: number, y: number, ang: number, size: number, color: string, weight = 500, italic = false) {
-    const ctx = this.ctx!;
-    ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
-    ctx.font = `${italic ? "italic " : ""}${weight} ${size}px ${FONT}`;
-    ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.lineWidth = 3.5; ctx.strokeStyle = this.P.halo; ctx.lineJoin = "round"; ctx.strokeText(text, 0, 0);
-    ctx.fillStyle = color; ctx.fillText(text, 0, 0); ctx.restore();
-  }
-  private drawLabels() {
-    const ctx = this.ctx!, s = this.cam.s, P = this.P, { cw, ch, cam, w } = this;
-    if (s > 0.28) {
-      const step = Math.max(900, 520 / s);
-      for (let x = Math.floor((cam.x - cw / s) / step) * step; x < cam.x + cw / s; x += step) {
-        const p = this.toScreen({ x: x + step / 2, y: riverY(x + step / 2) });
-        if (p.x < -60 || p.x > cw + 60 || p.y < -20 || p.y > ch + 20) continue;
-        const d = riverY(x + step / 2 + 10) - riverY(x + step / 2 - 10);
-        this.labelText(NOME_RIO, p.x, p.y, Math.atan2(d, 20), 13, P.waterLabel, 600, true);
-      }
-      const pc = this.toScreen({ x: ((PARK.i0 + PARK.i1) / 2) * B, y: ((PARK.j0 + PARK.j1) / 2) * B });
-      if (pc.x > -80 && pc.x < cw + 80) this.labelText(NOME_PARQUE, pc.x, pc.y, 0, 13, P.parkLabel, 600);
-    }
-    ctx.font = `500 12px ${FONT}`;
-    for (const d of ["h", "v"] as const)
-      for (const key in w.lines[d]) {
-        const arr = w.lines[d][key]; if (!arr.length) continue;
-        const major = arr[0].major;
-        if (major && s < 0.3) continue;
-        if (!major && s < 0.8) continue;
-        const k = Math.max(1, Math.ceil((major ? 380 : 300) / (B * s)));
-        for (const e of arr) {
-          if ((e.idx + +key * 2) % k !== 0) continue;
-          const a = this.toScreen(w.nodes[e.a]), b = this.toScreen(w.nodes[e.b]);
-          const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-          if (mx < -80 || mx > cw + 80 || my < -30 || my > ch + 30) continue;
-          const len = Math.hypot(b.x - a.x, b.y - a.y), tw = ctx.measureText(e.name).width;
-          if (len < tw + 16) continue;
-          let ang = Math.atan2(b.y - a.y, b.x - a.x);
-          if (ang > Math.PI / 2) ang -= Math.PI;
-          if (ang < -Math.PI / 2) ang += Math.PI;
-          this.labelText(e.name, mx, my, ang, major ? 12.5 : 11.5, P.label, major ? 650 : 500);
-        }
-      }
+    const wpx = n ? 11 : 8;
+    ctx.lineWidth = wpx + 4; ctx.strokeStyle = P.routeCase; ctx.stroke(path);
+    ctx.lineWidth = wpx; ctx.strokeStyle = P.route; ctx.stroke(path);
+    // setas de direção sobre a rota
+    ctx.setLineDash([2, 30]); ctx.lineDashOffset = this.reduceMotion ? 0 : -now / 30;
+    ctx.lineWidth = 3.5; ctx.strokeStyle = "rgba(255,255,255,.85)"; ctx.stroke(path);
+    ctx.setLineDash([]); ctx.lineDashOffset = 0;
   }
 
   private pinPath(w: number, h: number, top: number) {
@@ -543,14 +467,14 @@ export class EVEngine {
     p.arc(x0 + r, y0 + r, r, Math.PI / 2, Math.PI * 1.5); p.closePath(); return p;
   }
   private drawChargers(now: number) {
-    const ctx = this.ctx!, sel = this.selected, res = this.state.reservation;
-    const order = [...this.w.chargers].sort((a, b) => Number(a === sel) - Number(b === sel) || a.pos.y - b.pos.y);
-    for (const c of order) {
-      const p = this.toScreen(c.pos);
-      if (p.x < -40 || p.x > this.cw + 40 || p.y < -50 || p.y > this.ch + 20) continue;
+    const ctx = this.ctx!, sel = this.selected, res = this.state.reservation, s = this.scale;
+    const pts = this.w.chargers.map((c) => ({ c, p: this.toScreen(c.pos) }));
+    pts.sort((a, b) => Number(a.c === sel) - Number(b.c === sel) || a.p.y - b.p.y);
+    for (const { c, p } of pts) {
+      if (!this.onScreen(p, 50)) continue;
       const lv = level(c), col = COR_STATUS[lv], isSel = c === sel, dim = !this.matches(c) && !isSel;
       ctx.save(); ctx.translate(p.x, p.y); ctx.globalAlpha = dim ? 0.32 : 1;
-      if (this.cam.s < 0.26 && !isSel) {
+      if (s < 0.26 && !isSel) {
         ctx.beginPath(); ctx.arc(0, 0, 8, 0, 7); ctx.fillStyle = col; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = "#fff"; ctx.stroke(); ctx.restore(); continue;
       }
       const bt = this.bump.get(c.id);
@@ -578,9 +502,9 @@ export class EVEngine {
     this.evDrawn = [];
     if (!this.state.showEV) return;
     const ctx = this.ctx!, P = this.P;
-    const vis: { c: World["evs"][number]; p: Pt }[] = [];
-    for (const c of this.w.evs) { const p = this.toScreen(c); if (p.x < -20 || p.x > this.cw + 20 || p.y < -20 || p.y > this.ch + 20) continue; vis.push({ c, p }); }
-    if (this.cam.s < CFG.zoomAgruparEVs) {
+    const vis: { c: RealEV; p: Pt }[] = [];
+    for (const c of this.w.evs) { const p = this.toScreen(c); if (this.onScreen(p, 20)) vis.push({ c, p }); }
+    if (this.scale < CFG.zoomAgruparEVs) {
       const cell = 64, g = new Map<string, typeof vis>();
       for (const v of vis) { const k = Math.floor(v.p.x / cell) + "," + Math.floor(v.p.y / cell); let arr = g.get(k); if (!arr) g.set(k, (arr = [])); arr.push(v); }
       for (const arr of g.values()) {
@@ -593,90 +517,31 @@ export class EVEngine {
       }
     } else vis.forEach((v) => this.drawEV(v));
   }
-  private drawEV({ c, p }: { c: World["evs"][number]; p: Pt }) {
+  private drawEV({ c, p }: { c: RealEV; p: Pt }) {
     const ctx = this.ctx!;
-    ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(c.h);
+    ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(this.screenAngle(c, c.h, p));
     ctx.beginPath(); ctx.moveTo(9, 0); ctx.lineTo(-6, -5.5); ctx.lineTo(-3.5, 0); ctx.lineTo(-6, 5.5); ctx.closePath();
     ctx.fillStyle = this.P.ev; ctx.lineWidth = 2; ctx.strokeStyle = "#fff"; ctx.lineJoin = "round"; ctx.stroke(); ctx.fill(); ctx.restore();
     this.evDrawn.push({ cluster: false, ev: c, x: p.x, y: p.y, r: 13 });
   }
   private drawCar(now: number) {
-    const ctx = this.ctx!, p = this.toScreen(this.car);
+    const ctx = this.ctx!, p = this.toScreen(this.car), ang = this.screenAngle(this.car, this.car.h, p);
     ctx.save(); ctx.translate(p.x, p.y);
     const pu = this.reduceMotion ? 0.5 : (Math.sin(now / 600) + 1) / 2;
     ctx.beginPath(); ctx.arc(0, 0, 20 + pu * 5, 0, 7); ctx.fillStyle = "rgba(200,16,46,.15)"; ctx.fill();
     // cone de direção
-    ctx.save(); ctx.rotate(this.car.h);
+    ctx.save(); ctx.rotate(ang);
     const g = ctx.createRadialGradient(0, 0, 4, 0, 0, 60);
     g.addColorStop(0, "rgba(200,16,46,.28)"); g.addColorStop(1, "rgba(200,16,46,0)");
     ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, 60, -0.45, 0.45); ctx.closePath(); ctx.fillStyle = g; ctx.fill();
     ctx.restore();
-    ctx.rotate(this.car.h + Math.PI / 2);
+    ctx.rotate(ang + Math.PI / 2);
     ctx.beginPath(); ctx.moveTo(0, -14); ctx.lineTo(10, 11); ctx.lineTo(0, 5.5); ctx.lineTo(-10, 11); ctx.closePath();
     ctx.shadowColor = "rgba(0,0,0,.3)"; ctx.shadowBlur = 6; ctx.lineWidth = 3; ctx.strokeStyle = "#fff"; ctx.lineJoin = "round"; ctx.stroke(); ctx.shadowColor = "transparent";
     ctx.fillStyle = "#C8102E"; ctx.fill(); ctx.restore();
   }
 
-  /* ---------------- entrada (arrastar, pinça, roda, toque) ---------------- */
-  private bindInput(cv: HTMLCanvasElement) {
-    const ptrs = new Map<number, Pt>();
-    let drag: { x: number; y: number; sx: number; sy: number; moved: boolean; vx: number; vy: number; t: number } | null = null;
-    let pinch: { d0: number; s0: number; w: Pt } | null = null;
-    let lastTap = 0;
-    const local = (e: PointerEvent | WheelEvent) => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
-    const down = (e: PointerEvent) => {
-      cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, local(e)); this.anim = null; this.inertia = null;
-      if (ptrs.size === 1) { const p = local(e); drag = { x: p.x, y: p.y, sx: p.x, sy: p.y, moved: false, vx: 0, vy: 0, t: performance.now() }; }
-      else if (ptrs.size === 2) {
-        const [a, b] = [...ptrs.values()], mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-        pinch = { d0: Math.hypot(a.x - b.x, a.y - b.y), s0: this.cam.s, w: this.toWorld(mid.x, mid.y) }; drag = null;
-      }
-    };
-    const move = (e: PointerEvent) => {
-      const p = local(e);
-      if (!ptrs.has(e.pointerId)) { if (e.pointerType === "mouse") cv.style.cursor = this.hit(p.x, p.y) ? "pointer" : "grab"; return; }
-      ptrs.set(e.pointerId, p);
-      if (pinch && ptrs.size >= 2) {
-        const [a, b] = [...ptrs.values()], mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-        this.cam.s = clamp((pinch.s0 * Math.hypot(a.x - b.x, a.y - b.y)) / pinch.d0, CFG.zoomMin, CFG.zoomMax);
-        this.cam.x = pinch.w.x - (mid.x - this.cw / 2) / this.cam.s; this.cam.y = pinch.w.y - (mid.y - this.ch / 2) / this.cam.s;
-        this.setFollow(false); return;
-      }
-      if (!drag) return;
-      const dx = p.x - drag.x, dy = p.y - drag.y, now = performance.now(), dt = Math.max(1, now - drag.t);
-      if (!drag.moved && Math.hypot(p.x - drag.sx, p.y - drag.sy) > 6) { drag.moved = true; cv.style.cursor = "grabbing"; this.setFollow(false); }
-      if (drag.moved) { this.cam.x -= dx / this.cam.s; this.cam.y -= dy / this.cam.s; drag.vx = dx / dt; drag.vy = dy / dt; }
-      drag.x = p.x; drag.y = p.y; drag.t = now; this.clampCam();
-    };
-    const up = (e: PointerEvent) => {
-      if (!ptrs.has(e.pointerId)) return;
-      ptrs.delete(e.pointerId); cv.style.cursor = "grab";
-      if (pinch) { if (ptrs.size < 2) pinch = null; drag = null; return; }
-      if (drag) {
-        const p = local(e);
-        if (!drag.moved && e.type === "pointerup") {
-          const now = performance.now();
-          if (now - lastTap < 300) { this.zoomAt(p.x, p.y, 2); lastTap = 0; } else { lastTap = now; this.tap(p.x, p.y); }
-        } else if (drag.moved && performance.now() - drag.t < 80 && !this.reduceMotion) this.inertia = { vx: drag.vx, vy: drag.vy };
-      }
-      drag = null;
-    };
-    const wheel = (e: WheelEvent) => { e.preventDefault(); const p = local(e); this.zoomAt(p.x, p.y, Math.exp(-e.deltaY * 0.0016)); this.setFollow(false); };
-    const key = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement)?.tagName === "INPUT") return;
-      if (e.key === "+" || e.key === "=") this.zoomBy(1.4);
-      if (e.key === "-") this.zoomBy(1 / 1.4);
-      if (e.key === "Escape" && this.state.mode === "detail") this.closeDetail();
-    };
-    cv.addEventListener("pointerdown", down); cv.addEventListener("pointermove", move);
-    cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
-    cv.addEventListener("wheel", wheel, { passive: false }); addEventListener("keydown", key);
-    this.cleanup.push(() => {
-      cv.removeEventListener("pointerdown", down); cv.removeEventListener("pointermove", move);
-      cv.removeEventListener("pointerup", up); cv.removeEventListener("pointercancel", up);
-      cv.removeEventListener("wheel", wheel); removeEventListener("keydown", key);
-    });
-  }
+  /* ---------------- toque ---------------- */
   private hitCharger(x: number, y: number) {
     const sel = this.selected;
     for (const c of [...this.w.chargers].reverse()) {
@@ -686,18 +551,18 @@ export class EVEngine {
     return null;
   }
   private hit(x: number, y: number) {
-    if (this.tilted) return false;
     return !!this.hitCharger(x, y) || this.evDrawn.some((d) => Math.hypot(x - d.x, y - d.y) < d.r);
   }
   private tap(x: number, y: number) {
-    if (this.tilted) return; // perspectiva 3D ativa: coordenadas de toque não batem com o mapa plano
     const c = this.hitCharger(x, y);
     if (c) { this.selectCharger(c.id); return; }
     let best: (typeof this.evDrawn)[number] | null = null, bd = Infinity;
     for (const d of this.evDrawn) { const dd = Math.hypot(x - d.x, y - d.y); if (dd < d.r && dd < bd) { bd = dd; best = d; } }
     if (best) {
-      if (best.cluster) { this.zoomAt(best.x, best.y, 2.2); this.toast(`${best.n} carros elétricos nesta área`); }
-      else this.toast(`${best.ev.model}, bateria ${best.ev.batt}%`);
+      if (best.cluster) {
+        const m = this.map!; m.easeTo({ center: m.unproject([best.x, best.y]), zoom: m.getZoom() + 1.2, duration: this.dur(450) });
+        this.toast(`${best.n} carros elétricos nesta área`);
+      } else this.toast(`${best.ev.model}, bateria ${best.ev.batt}%`);
       return;
     }
     if (this.state.mode === "detail") this.closeDetail();

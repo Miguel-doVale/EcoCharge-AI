@@ -55,6 +55,12 @@ export function TurnGlyph({ icon, size = 48 }: { icon: TurnIcon; size?: number }
           <path d="M18 10l-9 8 9 8" fill="none" stroke="#fff" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
         </>
       )}
+      {icon === "retorno" && (
+        <>
+          <path d="M32 40V18a8 8 0 0 0-16 0v12" fill="none" stroke="#fff" strokeWidth="5" strokeLinecap="round" />
+          <path d="M9 24l7 8 7-8" fill="none" stroke="#fff" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+        </>
+      )}
       {icon === "reto" && (
         <>
           <path d="M24 42V8" fill="none" stroke="#fff" strokeWidth="5" strokeLinecap="round" />

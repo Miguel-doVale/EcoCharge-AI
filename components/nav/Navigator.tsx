@@ -5,7 +5,9 @@ import Link from "next/link";
 import { AnimatePresence, motion, type PanInfo } from "motion/react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
+import "maplibre-gl/dist/maplibre-gl.css";
 import { EVEngine, type Filter } from "@/lib/ev/engine";
+import type { RoadData } from "@/lib/ev/realworld";
 import { COR_STATUS } from "@/lib/ev/config";
 import { EngineContext, useEngine, useUI } from "./engine-context";
 import { BackIcon, CarIcon, LocateIcon, MinusIcon, MoonIcon, PlusIcon, SearchIcon, SunIcon, TurnGlyph } from "./icons";
@@ -26,7 +28,22 @@ function useWide() {
 }
 
 export default function Navigator() {
-  const engine = useMemo(() => new EVEngine(), []);
+  // malha viária real de São Luís (gerada por scripts/build-saoluis-map.mjs)
+  const [data, setData] = useState<RoadData | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    fetch("/data/saoluis-roads.json").then((r) => { if (!r.ok) throw new Error(); return r.json(); }).then(setData).catch(() => setFailed(true));
+  }, []);
+  if (!data) return (
+    <div className="fixed inset-0 grid place-items-center bg-[#EEEEE9] text-[#5F6671]">
+      {failed ? "Não foi possível carregar o mapa. Verifique a conexão." : "Carregando mapa de São Luís…"}
+    </div>
+  );
+  return <NavigatorReady data={data} />;
+}
+
+function NavigatorReady({ data }: { data: RoadData }) {
+  const engine = useMemo(() => new EVEngine(data), [data]);
   return (
     <EngineContext.Provider value={engine}>
       <NavigatorShell />
@@ -39,7 +56,7 @@ function NavigatorShell() {
   const mode = useUI((s) => s.mode);
   const wide = useWide();
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const mapWrap = useRef<HTMLDivElement>(null);
+  const mapEl = useRef<HTMLDivElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
   const sheetRef = useRef<HTMLElement>(null);
 
@@ -50,39 +67,27 @@ function NavigatorShell() {
       const sh = sheetRef.current?.getBoundingClientRect();
       const tb = topRef.current?.getBoundingClientRect();
       if (!sh) return { l: 0, t: 0, r: 0, b: 0 };
-      // navegação: carro no ponto fixo da perspectiva (transformOrigin 78%)
-      if (engine.getState().mode === "nav") return { l: 0, t: ch * 0.56, r: 0, b: 0 };
+      // navegação: o carro fica na parte de baixo da tela, olhando a rua à frente
+      if (engine.getState().mode === "nav") {
+        const top = tb ? tb.bottom : 0, bottom = matchMedia("(min-width: 900px)").matches ? 0 : ch - sh.top;
+        return { l: 0, t: Math.max(top, ch * 0.42), r: 0, b: bottom };
+      }
       if (matchMedia("(min-width: 900px)").matches) return { l: sh.right + 12, t: 0, r: 70, b: 0 };
       return { l: 0, t: tb ? tb.bottom : 0, r: 60, b: ch - sh.top };
     });
-    engine.attach(cv);
+    engine.attach(mapEl.current!, cv);
     registerSW();
     return () => engine.detach();
   }, [engine]);
 
-  // perspectiva "3D" durante a navegação (GSAP)
-  useGSAP(() => {
-    const nav = mode === "nav";
-    engine.setTilted(nav);
-    gsap.to(mapWrap.current, {
-      rotationX: nav ? 38 : 0,
-      scale: nav ? 1.5 : 1,
-      transformPerspective: 1100,
-      transformOrigin: "50% 78%",
-      duration: engine.reduceMotion ? 0 : 1.1,
-      ease: "power3.inOut",
-    });
-  }, { dependencies: [mode] });
-
   return (
     <div className="fixed inset-0 overflow-hidden bg-[#EEEEE9] text-[var(--ui-text)] select-none dark:bg-[#161A20]">
-      <div ref={mapWrap} className="absolute inset-0 will-change-transform">
-        <canvas
-          ref={canvasRef}
-          className="block h-full w-full touch-none cursor-grab"
-          aria-label="Mapa interativo. Arraste para mover, use a roda do mouse ou pinça para zoom."
-        />
+      {/* mapa real (MapLibre) + camada própria de carregadores, EVs, carro e rota */}
+      {/* o CSS do MapLibre põe position: relative no contêiner; por isso o wrapper absoluto */}
+      <div className="absolute inset-0">
+        <div ref={mapEl} className="ev-map h-full w-full" aria-label="Mapa de São Luís. Arraste para mover, use a roda do mouse ou pinça para zoom." />
       </div>
+      <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 block h-full w-full" aria-hidden />
       {/* sombra de céu quando inclinado */}
       <AnimatePresence>
         {mode === "nav" && (

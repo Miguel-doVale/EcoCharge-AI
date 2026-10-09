@@ -7,7 +7,8 @@ export const CFG = {
   colunas: 26,
   linhas: 22, // tamanho da malha urbana
   qtdCarregadores: 15,
-  qtdEVs: 70,
+  qtdEVs: 70, // cena 3D da landing
+  qtdEVsCidade: 160, // EVs circulando no mapa real do navegador
   veiculo: {
     nome: "BYD Dolphin",
     bateriaKWh: 60.48,

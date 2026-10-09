@@ -302,9 +302,9 @@ function PreviewView() {
           <motion.li key={i} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.05 * i }}
             className="flex items-center gap-3 border-b border-[var(--ui-line)] py-2 last:border-0">
             <span className="grid h-7 w-7 flex-none place-items-center rounded-full bg-[var(--ui-soft)] text-xs font-bold">
-              {st.dir === "direita" ? "↱" : st.dir === "esquerda" ? "↰" : "⚑"}
+              {st.dir === "direita" ? "↱" : st.dir === "esquerda" ? "↰" : st.dir === "retorno" ? "↶" : "⚑"}
             </span>
-            <span className="flex-1">{st.dir === "chegada" ? `Chegada em ${st.street}` : `Vire à ${st.dir}${st.street ? ` na ${st.street}` : ""}`}</span>
+            <span className="flex-1">{st.dir === "chegada" ? `Chegada em ${st.street}` : st.dir === "retorno" ? `Faça o retorno${st.street ? ` na ${st.street}` : ""}` : `Vire à ${st.dir}${st.street ? ` na ${st.street}` : ""}`}</span>
             <span className="tabular text-[var(--ui-muted)]">{fmtDist(st.at)}</span>
           </motion.li>
         ))}

@@ -1,7 +1,7 @@
 /* Service worker do EcoCharge AI.
    - Páginas: rede primeiro, cópia em cache como reserva (abre mesmo com sinal fraco).
    - Arquivos estáticos do Next (/_next/static, com hash no nome): cache primeiro. */
-const CACHE = "ecocharge-v1";
+const CACHE = "ecocharge-v2";
 const SHELL = ["/navegador"]; // o app instalado é o navegador
 
 self.addEventListener("install", (e) => {
@@ -33,6 +33,11 @@ self.addEventListener("fetch", (e) => {
       fetch(req).then((res) => put(req, res))
         .catch(() => caches.match(req).then((m) => m || caches.match("/navegador")))
     );
+    return;
+  }
+  // malha viária: usa a cópia em cache e atualiza em segundo plano
+  if (url.pathname.startsWith("/data/")) {
+    e.respondWith(caches.match(req).then((m) => { const net = fetch(req).then((res) => put(req, res)).catch(() => m); return m || net; }));
     return;
   }
   if (url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/pwa-icon/") || /\.(svg|png|woff2)$/.test(url.pathname)) {

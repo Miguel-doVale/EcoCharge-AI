@@ -143,32 +143,10 @@ export function createWorld(seed = CFG.seed) {
     if (!blk || blk.type !== "urban") continue;
     const pos = bil(blk.q, 0.2, 0.2);
     if (chargers.some((c) => dist(c.pos, pos) < 520)) continue;
-    const idx = chargers.length, hub = R() < 0.6, n = hub ? pick([4, 6, 6, 8, 10]) : pick([2, 2, 3, 4]);
-    const cons: Connector[] = [];
-    for (let k = 0; k < n; k++) {
-      const dc = hub ? k < n - 2 : k === 0 && R() < 0.4;
-      const type: ConnectorType = dc ? (R() < 0.72 ? "CCS2" : R() < 0.5 ? "CHAdeMO" : "GB/T") : "Tipo 2";
-      const kw = dc ? pick([60, 120, 150, 180]) : pick([7.4, 22]);
-      const r = R(), st: ConnectorStatus = r < 0.5 ? "livre" : r < 0.92 ? "ocupado" : "offline";
-      cons.push({ n: k + 1, type, kw, st, eta: st === "ocupado" ? 5 + Math.floor(R() * 45) : 0 });
-    }
-    if (hub) {
-      const dcs = cons.filter((c) => c.type !== "Tipo 2");
-      if (dcs.length) {
-        const top = Math.max(...dcs.map((c) => c.kw));
-        cons.forEach((c) => { if (c.type !== "Tipo 2" && R() < 0.5) c.kw = top; });
-      }
-    }
-    const peak = 12 + R() * 7, peak2 = 8 + R() * 2;
-    const busyCurve = Array.from({ length: 24 }, (_, h) =>
-      clamp(0.08 + 0.75 * Math.exp(-((h - peak) ** 2) / 8) + 0.45 * Math.exp(-((h - peak2) ** 2) / 3) + (R() - 0.5) * 0.08, 0.04, 1));
-    const amenities = COMODIDADES.filter(() => R() < 0.45).slice(0, 4);
+    const idx = chargers.length;
     chargers.push({
-      id: idx, name: NOMES_CARREGADORES[idx % NOMES_CARREGADORES.length], op: pick(OPERADORAS),
-      addr: `${rowName(j)} com ${colName(i)}`, pos, node: nearestNode(pos), cons,
-      price: (1.49 + R() * 0.9).toFixed(2).replace(".", ","), open24: R() < 0.7,
-      amenities: amenities.length ? amenities : ["Banheiro"], busyCurve,
-      rating: Math.round((3.8 + R() * 1.2) * 10) / 10,
+      id: idx, name: NOMES_CARREGADORES[idx % NOMES_CARREGADORES.length],
+      addr: `${rowName(j)} com ${colName(i)}`, pos, node: nearestNode(pos), ...chargerProfile(R),
     });
   }
 
@@ -182,6 +160,35 @@ export function createWorld(seed = CFG.seed) {
   return { R, pick, nodes, nid, edges, adj, edgeByKey, blocks, buildings, lines, nearestNode, chargers, evs };
 }
 export type World = ReturnType<typeof createWorld>;
+
+/** conectores, preço, comodidades e curva de ocupação de um posto simulado */
+export function chargerProfile(R: () => number) {
+  const pick = <T,>(a: readonly T[]) => a[Math.floor(R() * a.length)];
+  const hub = R() < 0.6, n = hub ? pick([4, 6, 6, 8, 10]) : pick([2, 2, 3, 4]);
+  const cons: Connector[] = [];
+  for (let k = 0; k < n; k++) {
+    const dc = hub ? k < n - 2 : k === 0 && R() < 0.4;
+    const type: ConnectorType = dc ? (R() < 0.72 ? "CCS2" : R() < 0.5 ? "CHAdeMO" : "GB/T") : "Tipo 2";
+    const kw = dc ? pick([60, 120, 150, 180]) : pick([7.4, 22]);
+    const r = R(), st: ConnectorStatus = r < 0.5 ? "livre" : r < 0.92 ? "ocupado" : "offline";
+    cons.push({ n: k + 1, type, kw, st, eta: st === "ocupado" ? 5 + Math.floor(R() * 45) : 0 });
+  }
+  if (hub) {
+    const dcs = cons.filter((c) => c.type !== "Tipo 2");
+    if (dcs.length) {
+      const top = Math.max(...dcs.map((c) => c.kw));
+      cons.forEach((c) => { if (c.type !== "Tipo 2" && R() < 0.5) c.kw = top; });
+    }
+  }
+  const peak = 12 + R() * 7, peak2 = 8 + R() * 2;
+  const busyCurve = Array.from({ length: 24 }, (_, h) =>
+    clamp(0.08 + 0.75 * Math.exp(-((h - peak) ** 2) / 8) + 0.45 * Math.exp(-((h - peak2) ** 2) / 3) + (R() - 0.5) * 0.08, 0.04, 1));
+  const amenities = COMODIDADES.filter(() => R() < 0.45).slice(0, 4);
+  return {
+    op: pick(OPERADORAS), cons, price: (1.49 + R() * 0.9).toFixed(2).replace(".", ","), open24: R() < 0.7,
+    amenities: amenities.length ? amenities : ["Banheiro"], busyCurve, rating: Math.round((3.8 + R() * 1.2) * 10) / 10,
+  };
+}
 
 /* ---------- status dos carregadores ---------- */
 export function stats(c: Charger) {

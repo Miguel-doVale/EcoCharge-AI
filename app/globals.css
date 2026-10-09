@@ -162,3 +162,12 @@ html.lenis body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* créditos do mapa (OpenStreetMap/OpenFreeMap): sobem junto com o painel inferior */
+.ev-map .maplibregl-ctrl-bottom-right {
+  bottom: var(--map-inset-b, 0px);
+  transition: bottom 0.3s;
+}
+.ev-map .maplibregl-ctrl-attrib {
+  font: 500 11px var(--font-hanken), system-ui, sans-serif;
+}

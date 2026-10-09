@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useGSAP } from "@gsap/react";
@@ -31,58 +32,86 @@ export default function HowItWorks() {
   const [active, setActive] = useState(0);
 
   useGSAP(() => {
+    // fixa a seção e avança as etapas com o scroll, no PC e no celular
+    // (no celular o trecho por etapa é menor: a tela é mais baixa e o dedo rola mais rápido)
     const mm = gsap.matchMedia();
-    mm.add("(min-width: 900px)", () => {
+    const pinned = (perStep: number) => {
       const tl = gsap.timeline({
         defaults: { ease: "power2.inOut" },
         scrollTrigger: {
-          trigger: root.current, start: "top top", end: "+=" + STEPS.length * 85 + "%", pin: ".hiw-pin", scrub: 0.8,
+          trigger: root.current, start: "top top", end: "+=" + STEPS.length * perStep + "%", pin: ".hiw-pin", scrub: 0.8,
           onUpdate: (s) => setActive(Math.min(STEPS.length - 1, Math.floor(s.progress * STEPS.length * 0.999))),
         },
       });
       buildTimeline(tl);
-    });
-    mm.add("(max-width: 899px)", () => {
-      const tl = gsap.timeline({ defaults: { ease: "power2.inOut" }, scrollTrigger: { trigger: ".hiw-screen", start: "top 70%", end: "+=900", scrub: 0.8 } });
-      buildTimeline(tl);
-    });
+    };
+    mm.add("(min-width: 900px)", () => pinned(85));
+    mm.add("(max-width: 899px)", () => pinned(60));
     return () => mm.revert();
   }, { scope: root });
 
+  const step = STEPS[active];
+
   return (
     <section id="como-funciona" ref={root} className="relative bg-ink text-fg">
-      <div className="hiw-pin mx-auto grid min-h-[100svh] max-w-[1384px] items-center gap-12 px-5 py-24 sm:px-8 min-[900px]:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] min-[900px]:py-0">
-        <div>
-          <p className="mb-4 text-sm font-semibold uppercase tracking-[0.18em] text-volt">Como funciona</p>
-          <h2 className="font-display text-[clamp(2rem,4vw,3.4rem)] font-semibold leading-[1.02] tracking-[-0.03em]">
+      {/* celular: título → tela → etapa atual · PC: título e lista à esquerda, tela à direita */}
+      <div className="hiw-pin mx-auto grid min-h-[100svh] max-w-[1384px] content-center gap-6 px-5 pb-6 pt-20 sm:px-8 min-[900px]:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] min-[900px]:grid-rows-[auto_auto] min-[900px]:gap-x-12 min-[900px]:gap-y-0 min-[900px]:py-0">
+        <div className="min-[900px]:self-end">
+          <p className="mb-3 text-sm font-semibold uppercase tracking-[0.18em] text-volt min-[900px]:mb-4">Como funciona</p>
+          <h2 className="font-display text-[clamp(1.8rem,4vw,3.4rem)] font-semibold leading-[1.02] tracking-[-0.03em]">
             Prever. Calcular. Integrar.
           </h2>
-          <p className="mt-4 text-lg text-mist">Três movimentos. Uma rede só.</p>
-          <ol className="mt-8 space-y-1">
-            {STEPS.map((s, i) => {
-              const on = i === active, done = i < active;
-              return (
-                <li key={s.k} className={`relative overflow-hidden rounded-2xl border py-3 pl-5 pr-4 transition-all duration-500 ${on ? "border-volt/25 bg-volt/[.06]" : "border-transparent min-[900px]:opacity-50"}`}>
-                  {/* barra de progresso da etapa */}
-                  <span className={`absolute inset-y-3 left-0 w-[3px] rounded-full transition-colors duration-500 ${on ? "bg-volt" : done ? "bg-volt/40" : "bg-fg/10"}`} />
-                  <div className="flex items-center gap-3.5">
-                    <span className={`grid h-7 w-7 flex-none place-items-center rounded-full font-display text-[11px] font-semibold tabular transition-colors duration-500 ${on ? "bg-volt text-ink" : done ? "bg-volt/15 text-volt" : "bg-fg/[.06] text-mist"}`}>0{i + 1}</span>
-                    <span className="min-w-0">
-                      <span className={`block text-[10px] font-semibold uppercase tracking-[0.16em] transition-colors duration-500 ${on ? "text-volt" : "text-mist"}`}>{s.m}</span>
-                      <span className="block text-lg font-semibold leading-snug">{s.t}</span>
-                    </span>
-                  </div>
-                  <p className={`grid transition-all duration-500 ${on ? "mt-2 grid-rows-[1fr]" : "mt-2 grid-rows-[1fr] min-[900px]:mt-0 min-[900px]:grid-rows-[0fr]"}`}>
-                    <span className="overflow-hidden pl-[42px] text-[15px] leading-relaxed text-volt">{s.d}</span>
-                  </p>
-                </li>
-              );
-            })}
-          </ol>
+          <p className="mt-2 text-base text-mist min-[900px]:mt-4 min-[900px]:text-lg">Três movimentos. Uma rede só.</p>
+        </div>
+
+        {/* PC: lista completa */}
+        <ol className="mt-8 hidden space-y-1 self-start min-[900px]:col-start-1 min-[900px]:row-start-2 min-[900px]:block">
+          {STEPS.map((s, i) => {
+            const on = i === active, done = i < active;
+            return (
+              <li key={s.k} className={`relative overflow-hidden rounded-2xl border py-3 pl-5 pr-4 transition-all duration-500 ${on ? "border-volt/25 bg-volt/[.06]" : "border-transparent opacity-50"}`}>
+                {/* barra de progresso da etapa */}
+                <span className={`absolute inset-y-3 left-0 w-[3px] rounded-full transition-colors duration-500 ${on ? "bg-volt" : done ? "bg-volt/40" : "bg-fg/10"}`} />
+                <div className="flex items-center gap-3.5">
+                  <span className={`grid h-7 w-7 flex-none place-items-center rounded-full font-display text-[11px] font-semibold tabular transition-colors duration-500 ${on ? "bg-volt text-ink" : done ? "bg-volt/15 text-volt" : "bg-fg/[.06] text-mist"}`}>0{i + 1}</span>
+                  <span className="min-w-0">
+                    <span className={`block text-[10px] font-semibold uppercase tracking-[0.16em] transition-colors duration-500 ${on ? "text-volt" : "text-mist"}`}>{s.m}</span>
+                    <span className="block text-lg font-semibold leading-snug">{s.t}</span>
+                  </span>
+                </div>
+                <p className={`grid transition-all duration-500 ${on ? "mt-2 grid-rows-[1fr]" : "mt-0 grid-rows-[0fr]"}`}>
+                  <span className="overflow-hidden pl-[42px] text-[15px] leading-relaxed text-volt">{s.d}</span>
+                </p>
+              </li>
+            );
+          })}
+        </ol>
+
+        {/* celular: só a etapa atual, trocando com o scroll */}
+        <div className="order-last min-[900px]:hidden" aria-live="polite">
+          <div className="mb-3 flex items-center gap-1.5" aria-hidden>
+            {STEPS.map((s, i) => (
+              <span key={s.k} className={`h-1 flex-1 rounded-full transition-colors duration-500 ${i <= active ? "bg-volt" : "bg-fg/10"}`} />
+            ))}
+          </div>
+          <div className="relative min-h-[148px] overflow-hidden rounded-2xl border border-volt/25 bg-volt/[.06] p-4">
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div key={active} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}>
+                <div className="flex items-center gap-3">
+                  <span className="grid h-7 w-7 flex-none place-items-center rounded-full bg-volt font-display text-[11px] font-semibold text-ink tabular">0{active + 1}</span>
+                  <span className="min-w-0">
+                    <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-volt">{step.m} · {active + 1}/{STEPS.length}</span>
+                    <span className="block text-lg font-semibold leading-snug">{step.t}</span>
+                  </span>
+                </div>
+                <p className="mt-2 text-[15px] leading-relaxed text-volt">{step.d}</p>
+              </motion.div>
+            </AnimatePresence>
+          </div>
         </div>
 
         {/* "tela" da central multimídia */}
-        <div className="hiw-screen site-dark relative">
+        <div className="hiw-screen site-dark relative min-[900px]:col-start-2 min-[900px]:row-span-2 min-[900px]:row-start-1 min-[900px]:self-center">
           <div className="pointer-events-none absolute -inset-3 rounded-[48px] sm:-inset-10 bg-[radial-gradient(closest-side,rgba(184,255,60,.12),transparent)]" />
           <div className="relative rounded-[28px] border border-fg/10 bg-gradient-to-b from-[#1a1f26] to-[#0c0f13] p-3 shadow-[0_40px_120px_-30px_rgba(0,0,0,.9)]">
             <div className="relative aspect-[16/10] overflow-hidden rounded-[20px] bg-[#161a20]">

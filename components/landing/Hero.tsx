@@ -74,7 +74,7 @@ export default function Hero() {
         animate={{ y: [0, -8, 0] }} transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
       >
         <div className="flex items-center justify-between text-xs text-mist">
-          <span>Hub Beira-Rio · Voltra</span><span className="flex items-center gap-1.5"><i className="live-dot h-1.5 w-1.5 rounded-full bg-s-ok" />ao vivo</span>
+          <span>Estacionamento UNDB · Recarga Já</span><span className="flex items-center gap-1.5"><i className="live-dot h-1.5 w-1.5 rounded-full bg-s-ok" />ao vivo</span>
         </div>
         <div className="mt-3 font-display text-2xl font-semibold tracking-tight">4 <span className="text-mist">de 6 livres</span></div>
         <div className="mt-4 grid grid-cols-6 gap-1.5">
@@ -82,7 +82,7 @@ export default function Hero() {
             <span key={i} className={`h-10 rounded-lg ${s === "ok" ? "bg-s-ok/85" : "bg-s-full/80"}`} />
           ))}
         </div>
-        <div className="mt-4 flex justify-between text-sm text-mist"><span>até 120 kW</span><span>1,2 km · 4 min</span></div>
+        <div className="mt-4 flex justify-between text-sm text-mist"><span>até 180 kW</span><span>370 m · 1 min</span></div>
       </motion.div>
     </section>
   );

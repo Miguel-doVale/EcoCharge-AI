@@ -67,7 +67,7 @@ function Clusters() {
 function BatteryRoute() {
   return (
     <div className="space-y-3">
-      {[["Hub Beira-Rio", 31, "ok"], ["Garagem Sul", 18, "warn"], ["Posto Litorânea", 2, "full"]].map(([n, b, s], i) => (
+      {[["Estacionamento UNDB", 31, "ok"], ["São Luís Shopping", 18, "warn"], ["Praia do Calhau", 2, "full"]].map(([n, b, s], i) => (
         <div key={n as string}>
           <div className="mb-1.5 flex justify-between text-sm"><span className="text-fg">{n}</span><span className="tabular text-mist">chega com <b className={s === "ok" ? "text-s-ok" : s === "warn" ? "text-s-warn" : "text-s-full"}>{b}%</b></span></div>
           <div className="h-2 overflow-hidden rounded-full bg-fg/[.06]">
@@ -87,32 +87,28 @@ export default function Features() {
         <motion.div {...reveal} transition={{ duration: 0.9, ease }} className="mb-14 max-w-[720px]">
           <p className="mb-4 text-sm font-semibold uppercase tracking-[0.18em] text-volt">Recursos</p>
           <h2 className="font-display text-[clamp(2rem,4.4vw,3.8rem)] font-semibold leading-[1.02] tracking-[-0.03em]">
-            Não só onde carregar. <span className="text-mist">Quando, onde e como.</span>
+            Informação de recarga onde ela importa: <span className="text-mist">no mapa.</span>
           </h2>
         </motion.div>
 
         <div className="grid gap-4 md:grid-cols-6">
           <Card className="md:col-span-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-volt">Rede integrada</p>
-            <h3 className="mt-2 text-2xl font-semibold tracking-tight">Redes diferentes, uma camada de dados</h3>
-            <p className="mb-8 mt-2 max-w-[48ch] text-mist">Cada tomada com tipo, potência e status ao vivo, não importa de qual rede ela seja.</p>
+            <h3 className="text-2xl font-semibold tracking-tight">Status por conector, ao vivo</h3>
+            <p className="mb-8 mt-2 max-w-[48ch] text-mist">Cada tomada com tipo, potência e previsão de liberação. O número no marcador muda junto.</p>
             <LiveConnectors />
           </Card>
           <Card className="md:col-span-2" delay={0.08}>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-volt">Integrar</p>
-            <h3 className="mt-2 text-2xl font-semibold tracking-tight">Clusters de EVs</h3>
+            <h3 className="text-2xl font-semibold tracking-tight">Clusters de EVs</h3>
             <p className="mb-6 mt-2 text-mist">Afastou o zoom, os carros se agrupam. Aproximou, cada um aparece.</p>
             <Clusters />
           </Card>
           <Card className="md:col-span-3" delay={0.04}>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-volt">Rotas eficientes</p>
-            <h3 className="mt-2 text-2xl font-semibold tracking-tight">Rota calculada pela energia</h3>
-            <p className="mb-8 mt-2 text-mist">Você sabe com quanto de bateria chega em cada posto antes de sair de casa.</p>
+            <h3 className="text-2xl font-semibold tracking-tight">Rota com bateria na chegada</h3>
+            <p className="mb-8 mt-2 text-mist">Postos fora do alcance são sinalizados antes de você sair.</p>
             <BatteryRoute />
           </Card>
           <Card className="md:col-span-3" delay={0.12}>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-volt">Calcular</p>
-            <h3 className="mt-2 text-2xl font-semibold tracking-tight">Reserve o conector</h3>
+            <h3 className="text-2xl font-semibold tracking-tight">Reserve o conector</h3>
             <p className="mt-2 text-mist">Segure uma tomada livre por 15 minutos enquanto dirige até o posto. Ao chegar, a recarga começa nele.</p>
             <div className="mt-8 flex items-center gap-4 rounded-2xl border border-fg/10 bg-fg/[.03] p-4">
               <span className="grid h-12 w-12 place-items-center rounded-xl bg-[#2f6fe4] font-display text-lg font-semibold text-white">#3</span>
@@ -120,7 +116,7 @@ export default function Features() {
               <motion.span className="h-2.5 w-2.5 rounded-full bg-[#2f6fe4]" animate={{ opacity: [1, 0.2, 1] }} transition={{ repeat: Infinity, duration: 1.6 }} />
             </div>
           </Card>
-          {["IA que prevê a lotação", "Navegação em perspectiva", "Recarga com custo em tempo real"].map((t, i) => (
+          {["IA que prevê a lotação", "Modo navegação em perspectiva", "Recarga com custo em tempo real"].map((t, i) => (
             <Card key={t} className="flex min-h-[168px] flex-col justify-between gap-8 md:col-span-2" delay={i * 0.06}>
               <span className="font-display text-sm text-volt">0{i + 1}</span>
               <h3 className="max-w-[16ch] text-2xl font-semibold leading-tight tracking-tight">{t}</h3>

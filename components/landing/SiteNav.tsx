@@ -26,7 +26,6 @@ export default function SiteNav() {
       >
         <Link href="/" aria-label="EcoCharge AI, início" className="flex-none"><span className="sm:hidden"><Logo h={11} mark={28} /></span><span className="hidden sm:block"><Logo /></span></Link>
         <div className="hidden items-center gap-7 text-sm font-medium text-mist lg:flex">
-          <a href="#problema" className="transition-colors hover:text-fg">O problema</a>
           <a href="#como-funciona" className="transition-colors hover:text-fg">Como funciona</a>
           <a href="#painel" className="transition-colors hover:text-fg">Test drive</a>
           <a href="#recursos" className="transition-colors hover:text-fg">Recursos</a>

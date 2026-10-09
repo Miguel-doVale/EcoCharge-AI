@@ -38,12 +38,9 @@ export default function FinalCTA() {
       </div>
 
       <div className="relative z-10 mx-auto -mt-[clamp(3rem,9vw,8rem)] flex max-w-[1384px] flex-col items-center gap-8 px-5 text-center sm:px-8 md:flex-row md:items-end md:justify-between md:text-left">
-        <div>
-          <p className="mb-4 text-sm font-semibold uppercase tracking-[0.18em] text-volt">A pergunta que fica</p>
-          <h2 className="max-w-[20ch] font-display text-[clamp(2rem,4.4vw,3.8rem)] font-semibold leading-[1.04] tracking-[-0.035em]">
-            Quando o caos chegar… <span className="text-mist">o que teremos feito para evitá-lo?</span>
-          </h2>
-        </div>
+        <h2 className="max-w-[14ch] font-display text-[clamp(2.2rem,5vw,4.4rem)] font-semibold leading-[1] tracking-[-0.035em]">
+          Teste o navegador agora.
+        </h2>
         {/* área de captura maior que o botão: o ímã começa antes e o clique nunca cai fora */}
         <div ref={zone} onPointerMove={onMove} onPointerLeave={reset} className="-m-6 p-6">
           <motion.div style={{ x: sx, y: sy }}>
@@ -57,7 +54,7 @@ export default function FinalCTA() {
 
       <footer className="mx-auto mt-36 flex max-w-[1320px] flex-col gap-6 border-t border-fg/[.08] px-5 py-10 text-sm text-mist sm:px-8 md:mt-52 md:flex-row md:items-center md:justify-between">
         <Logo h={12} mark={28} />
-        <p>Protótipo. Cidade, carregadores e EVs são simulados; status inspirado no protocolo OCPI.</p>
+        <p>Protótipo. Mapa e ruas reais de São Luís (OpenStreetMap); carregadores, status e EVs são simulados.</p>
         <p>© {new Date().getFullYear()} EcoCharge AI</p>
       </footer>
     </section>

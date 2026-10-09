@@ -13,21 +13,23 @@ function Counter({ to, prefix = "", suffix = "", decimals = 0 }: { to: number; p
   return <motion.span ref={ref}>{txt}</motion.span>;
 }
 
+// eventos da simulação, com os postos do navegador
 const EVENTS = [
-  "Hub Beira-Rio · conector 3 liberado",
-  "Posto Central · CCS2 120 kW ocupado",
-  "Shopping Rio Claro · 2 vagas abertas",
-  "Campus Tecnológico · Tipo 2 liberado",
-  "Garagem Sul · fila zerada",
-  "Arena Municipal · 180 kW disponível",
-  "Praça dos Ipês · conector 1 ocupado",
+  "Tropical Shopping · conector 3 liberado",
+  "São Luís Shopping · CCS2 180 kW ocupado",
+  "Lagoa da Jansen · 1 vaga aberta",
+  "Estacionamento UNDB · CCS2 liberado",
+  "Rangedor Mall · fila zerada",
+  "Praia do Calhau · 180 kW disponível",
+  "Jaracati Shopping · conector 1 ocupado",
 ];
 
+// números do protótipo como ele é hoje (postos e carros simulados sobre o mapa real)
 const STATS = [
-  { n: 21, p: "", s: " mil", l: "pontos públicos de recarga no Brasil hoje", src: "ABVE" },
-  { n: 90, p: "", s: "%", l: "de crescimento anual da frota elétrica", src: "" },
-  { n: 300, p: "", s: " mil", l: "carregadores necessários na América Latina", src: "ZapCharge" },
-  { n: 30, p: "1:", s: "", l: "um eletroposto para cada 30 veículos", src: "Diário do Estado" },
+  { n: 16, s: "", l: "postos simulados em lugares reais de São Luís" },
+  { n: 160, s: "", l: "EVs simulados circulando pelas ruas reais" },
+  { n: 2.6, s: " s", d: 1, l: "entre atualizações de status" },
+  { n: 180, s: " kW", l: "potência máxima por conector" },
 ];
 
 export default function LiveTicker() {
@@ -35,20 +37,13 @@ export default function LiveTicker() {
   useEffect(() => { const i = setInterval(() => setTick((t) => t + 1), 2600); return () => clearInterval(i); }, []);
   return (
     <section className="relative border-y border-fg/[.07] bg-ink">
-      <div className="px-5 pt-10 sm:px-8">
-        <div className="mx-auto max-w-[1320px]">
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-volt">Urgência</p>
-          <h2 className="mt-3 font-display text-[clamp(1.5rem,2.6vw,2.2rem)] font-semibold tracking-[-0.02em] text-fg">A infraestrutura não acompanha a demanda.</h2>
-        </div>
-      </div>
-      <div className="mx-auto mt-8 grid max-w-[1320px] grid-cols-2 gap-px border-t border-fg/[.07] bg-fg/[.07] md:grid-cols-4">
+      <div className="mx-auto grid max-w-[1320px] grid-cols-2 gap-px bg-fg/[.07] md:grid-cols-4">
         {STATS.map((x) => (
-          <div key={x.l} className="flex flex-col bg-ink px-5 py-9 sm:px-8">
+          <div key={x.l} className="bg-ink px-5 py-9 sm:px-8">
             <div className="font-display text-[clamp(2rem,4vw,3.2rem)] font-semibold tracking-tight text-fg tabular">
-              <Counter to={x.n} prefix={x.p} suffix={x.s} />
+              <Counter to={x.n} suffix={x.s} decimals={x.d} />
             </div>
             <p className="mt-2 text-sm text-mist">{x.l}</p>
-            {x.src && <p className="mt-auto pt-3 text-[11px] text-mist/60">Fonte: {x.src}</p>}
           </div>
         ))}
       </div>

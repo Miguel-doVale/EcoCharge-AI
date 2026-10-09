@@ -8,14 +8,13 @@ import { useGSAP } from "@gsap/react";
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
 
-// a ordem segue as camadas da animação; cada passo diz a qual movimento do pitch pertence
 const STEPS = [
-  { k: "Mapa", m: "Integrar", t: "Um mapa de verdade, não um dashboard", d: "Ruas, quarteirões, rio e parques reconhecíveis, com o seu carro no centro e orientado." },
-  { k: "Veículos próximos", m: "Integrar", t: "EVs como marcadores discretos", d: "Carros elétricos aparecem como setas pequenas e viram clusters ao afastar o zoom." },
-  { k: "Carregadores", m: "Integrar", t: "Todas as redes num mapa só", d: "Postos de redes diferentes na mesma camada, com o número de vagas livres no marcador." },
-  { k: "Disponibilidade ao vivo", m: "Prever", t: "Verde, amarelo, vermelho", d: "Com vagas, quase cheio ou lotado, atualizado a cada poucos segundos. O próximo passo é prever a fila antes dela se formar." },
-  { k: "Seleção do posto", m: "Prever", t: "Conector por conector", d: "Conectores livres e ocupados, potência máxima e a previsão de quando cada um libera." },
-  { k: "Navegação", m: "Calcular", t: "Rota até a tomada", d: "Rota mais eficiente pelas ruas, com tempo, chegada e a bateria estimada ao chegar." },
+  { k: "Mapa", t: "Um mapa de verdade, não um dashboard", d: "Ruas, quarteirões, rio e parques reconhecíveis. Arraste, dê zoom com pinça e veja seu BYD no centro, com orientação." },
+  { k: "Veículos próximos", t: "EVs como marcadores discretos", d: "Carros elétricos aparecem como setas pequenas. Ao afastar o zoom, viram clusters com contagem para não poluir a navegação." },
+  { k: "Carregadores", t: "Prioridade para quem carrega", d: "Cada posto tem um marcador com o número de vagas livres. Eles continuam visíveis mesmo com o zoom bem afastado." },
+  { k: "Disponibilidade ao vivo", t: "Verde, amarelo, vermelho", d: "Status atualizado a cada poucos segundos via OCPI: com vagas, quase cheio ou lotado. O marcador pulsa quando muda." },
+  { k: "Seleção do posto", t: "Conector por conector", d: "Ao tocar, abre o card: conectores totais, livres, ocupados, kW máximo e a previsão de quando cada um libera. E a EcoCharge AI indica o posto onde você sai carregado mais cedo." },
+  { k: "Navegação", t: "Rota até a tomada", d: "Rota pelas ruas, tempo, chegada e bateria estimada. Instruções curva a curva e a câmera segue o carro em perspectiva." },
 ];
 
 const PINS = [
@@ -59,9 +58,8 @@ export default function HowItWorks() {
         <div className="min-[900px]:self-end">
           <p className="mb-3 text-sm font-semibold uppercase tracking-[0.18em] text-volt min-[900px]:mb-4">Como funciona</p>
           <h2 className="font-display text-[clamp(1.8rem,4vw,3.4rem)] font-semibold leading-[1.02] tracking-[-0.03em]">
-            Prever. Calcular. Integrar.
+            Do mapa à tomada, <span className="text-mist">em seis camadas.</span>
           </h2>
-          <p className="mt-2 text-base text-mist min-[900px]:mt-4 min-[900px]:text-lg">Três movimentos. Uma rede só.</p>
         </div>
 
         {/* PC: lista completa */}
@@ -75,7 +73,6 @@ export default function HowItWorks() {
                 <div className="flex items-center gap-3.5">
                   <span className={`grid h-7 w-7 flex-none place-items-center rounded-full font-display text-[11px] font-semibold tabular transition-colors duration-500 ${on ? "bg-volt text-ink" : done ? "bg-volt/15 text-volt" : "bg-fg/[.06] text-mist"}`}>0{i + 1}</span>
                   <span className="min-w-0">
-                    <span className={`block text-[10px] font-semibold uppercase tracking-[0.16em] transition-colors duration-500 ${on ? "text-volt" : "text-mist"}`}>{s.m}</span>
                     <span className="block text-lg font-semibold leading-snug">{s.t}</span>
                   </span>
                 </div>
@@ -100,7 +97,7 @@ export default function HowItWorks() {
                 <div className="flex items-center gap-3">
                   <span className="grid h-7 w-7 flex-none place-items-center rounded-full bg-volt font-display text-[11px] font-semibold text-ink tabular">0{active + 1}</span>
                   <span className="min-w-0">
-                    <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-volt">{step.m} · {active + 1}/{STEPS.length}</span>
+                    <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-volt">{step.k} · {active + 1}/{STEPS.length}</span>
                     <span className="block text-lg font-semibold leading-snug">{step.t}</span>
                   </span>
                 </div>
@@ -123,7 +120,7 @@ export default function HowItWorks() {
                   <rect x="40" y="300" width="110" height="80" rx="4" fill="#1b2e22" />
                   {[60, 140, 220, 300, 380, 460, 540, 620].map((x) => <line key={"v" + x} x1={x} y1="0" x2={x} y2="400" stroke={x % 160 === 140 ? "#6b5b36" : "#2c333d"} strokeWidth={x % 160 === 140 ? 9 : 5} />)}
                   {[40, 120, 200, 290, 360].map((y) => <line key={"h" + y} x1="0" y1={y} x2="640" y2={y} stroke={y === 120 ? "#6b5b36" : "#2c333d"} strokeWidth={y === 120 ? 9 : 5} />)}
-                  <text x="470" y="256" fill="#7fa9d4" fontSize="11" fontStyle="italic" fontWeight="600">Rio Claro</text>
+                  <text x="470" y="256" fill="#7fa9d4" fontSize="11" fontStyle="italic" fontWeight="600">Rio Anil</text>
                 </g>
                 {/* camada 2: EVs */}
                 <g className="l-evs" opacity="0">
@@ -158,8 +155,8 @@ export default function HowItWorks() {
 
               {/* camada 5: card do posto */}
               <div className="l-card absolute bottom-3 left-3 w-[58%] max-w-[300px] rounded-2xl bg-[#1e232b] p-3.5 text-[#eef0f3] opacity-0 shadow-2xl sm:bottom-4 sm:left-4">
-                <div className="text-[13px] font-bold sm:text-[15px]">Posto Central</div>
-                <div className="text-[10px] text-[#9ea6b1] sm:text-xs">Recarga Já · Av. Brasil</div>
+                <div className="text-[13px] font-bold sm:text-[15px]">Tropical Shopping</div>
+                <div className="text-[10px] text-[#9ea6b1] sm:text-xs">Recarga Já · Av. Colares Moreira</div>
                 <div className="mt-2 grid grid-cols-4 divide-x divide-[#2e3540] rounded-lg border border-[#2e3540] text-center">
                   {[["6", "conect."], ["4", "livres"], ["2", "ocup."], ["120", "kW"]].map(([n, l], i) => (
                     <div key={l} className="py-1"><b className={`block text-sm sm:text-lg ${i === 1 ? "text-s-ok" : i === 2 ? "text-s-full" : ""}`}>{n}</b><span className="text-[9px] text-[#9ea6b1] sm:text-[10px]">{l}</span></div>
@@ -170,7 +167,7 @@ export default function HowItWorks() {
               {/* camada 6: faixa de instrução */}
               <div className="l-banner absolute left-3 right-3 top-3 flex items-center gap-3 rounded-2xl bg-[#0b6e4f] px-3.5 py-2.5 text-fg opacity-0 sm:right-auto sm:w-[60%]">
                 <svg width="30" height="30" viewBox="0 0 48 48" aria-hidden><path d="M14 40V24a6 6 0 0 1 6-6h16" fill="none" stroke="#fff" strokeWidth="5" strokeLinecap="round" /><path d="M30 10l9 8-9 8" fill="none" stroke="#fff" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                <div><div className="text-lg font-extrabold leading-none">120 m</div><div className="text-xs font-semibold opacity-90 sm:text-sm">Vire à direita na Av. Brasil</div></div>
+                <div><div className="text-lg font-extrabold leading-none">120 m</div><div className="text-xs font-semibold opacity-90 sm:text-sm">Vire à direita na Rua dos Azulões</div></div>
               </div>
             </div>
           </div>

@@ -3,17 +3,8 @@
 import Link from "next/link";
 import { motion, useMotionValueEvent, useScroll } from "motion/react";
 import { useState } from "react";
-
-export function Logo() {
-  return (
-    <span className="flex items-center gap-2.5 font-display text-[15px] font-semibold tracking-tight text-white">
-      <span className="grid h-8 w-8 place-items-center rounded-[10px] bg-volt text-ink">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M13.5 2 4.5 13.5H11L9.5 22l10-12.5H13z" /></svg>
-      </span>
-      EcoCharge<span className="text-volt">AI</span>
-    </span>
-  );
-}
+import { Logo } from "@/components/brand/Brand";
+import { ThemeToggle } from "./SiteTheme";
 
 export default function SiteNav() {
   const { scrollY } = useScroll();
@@ -31,18 +22,22 @@ export default function SiteNav() {
       transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
     >
       <nav
-        className={`mx-auto flex h-14 max-w-[1320px] items-center justify-between rounded-full pl-4 pr-1.5 transition-colors duration-500 ${solid ? "border border-white/10 bg-ink/70 backdrop-blur-xl" : "border border-transparent"}`}
+        className={`mx-auto flex h-14 max-w-[1320px] items-center justify-between rounded-full pl-4 pr-1.5 transition-colors duration-500 ${solid ? "border border-fg/10 bg-ink/70 backdrop-blur-xl" : "border border-transparent"}`}
       >
-        <Link href="/" aria-label="EcoCharge AI, início"><Logo /></Link>
-        <div className="hidden items-center gap-7 text-sm font-medium text-mist md:flex">
-          <a href="#como-funciona" className="transition-colors hover:text-white">Como funciona</a>
-          <a href="#painel" className="transition-colors hover:text-white">No painel</a>
-          <a href="#recursos" className="transition-colors hover:text-white">Recursos</a>
-          <a href="#arquitetura" className="transition-colors hover:text-white">Arquitetura</a>
+        <Link href="/" aria-label="EcoCharge AI, início" className="flex-none"><span className="sm:hidden"><Logo h={11} mark={28} /></span><span className="hidden sm:block"><Logo /></span></Link>
+        <div className="hidden items-center gap-7 text-sm font-medium text-mist lg:flex">
+          <a href="#problema" className="transition-colors hover:text-fg">O problema</a>
+          <a href="#como-funciona" className="transition-colors hover:text-fg">Como funciona</a>
+          <a href="#painel" className="transition-colors hover:text-fg">Test drive</a>
+          <a href="#recursos" className="transition-colors hover:text-fg">Recursos</a>
+          <a href="#arquitetura" className="transition-colors hover:text-fg">Arquitetura</a>
         </div>
-        <Link href="/navegador" className="inline-flex h-11 items-center whitespace-nowrap rounded-full bg-white px-5 text-sm font-bold text-ink transition-colors hover:bg-volt">
+        <div className="flex items-center gap-2 sm:gap-3">
+        <ThemeToggle />
+        <Link href="/navegador" className="inline-flex h-11 items-center whitespace-nowrap rounded-full bg-fg px-4 text-sm sm:px-5 font-bold text-ink transition-colors hover:bg-volt">
           <span className="hidden sm:inline">Abrir navegador</span><span className="sm:hidden">Navegador</span>
         </Link>
+        </div>
       </nav>
     </motion.header>
   );

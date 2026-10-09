@@ -10,7 +10,7 @@ const CarScene = dynamic(() => import("./CarScene"), {
   ssr: false,
   loading: () => (
     <div className="absolute inset-0 grid place-items-center">
-      <div className="h-14 w-14 animate-spin rounded-full border-2 border-white/10 border-t-volt" />
+      <div className="h-14 w-14 animate-spin rounded-full border-2 border-fg/10 border-t-volt" />
     </div>
   ),
 });
@@ -43,10 +43,10 @@ export default function CarExperience() {
   const leave = () => setCmd({ t: "leave", id: Date.now() });
 
   return (
-    <section id="painel" className="relative bg-ink px-3 py-24 text-white sm:px-5 md:py-36">
+    <section id="painel" className="relative bg-ink px-3 py-24 text-fg sm:px-5 md:py-36">
       <div className="mx-auto mb-12 max-w-[1320px] px-2 sm:px-3 md:mb-16 md:flex md:items-end md:justify-between md:gap-10">
-        <h2 className="max-w-[16ch] font-display text-[clamp(2rem,4.4vw,3.8rem)] font-semibold leading-[1.02] tracking-[-0.03em]">
-          Entre no carro.
+        <h2 className="max-w-[16ch] font-display text-[clamp(2rem,4.4vw,3.8rem)] font-semibold leading-[1.02] tracking-[-0.03em] text-volt">
+          Faça um test drive.
         </h2>
         <p className="mt-5 max-w-[44ch] text-lg leading-relaxed text-mist md:mt-0">
           Toque na porta do motorista, sente no banco e use o navegador de verdade, direto na central de 12,8 polegadas.
@@ -56,7 +56,7 @@ export default function CarExperience() {
       <motion.div
         ref={ref}
         style={{ scale, borderRadius: radius }}
-        className="relative mx-auto h-[min(80vh,780px)] min-h-[520px] max-w-[1400px] overflow-hidden border border-white/10 bg-ink"
+        className="site-dark relative mx-auto h-[min(80vh,780px)] min-h-[520px] max-w-[1400px] overflow-hidden border border-fg/10 bg-ink text-fg"
       >
         {mounted && <CarScene phase={phase} setPhase={setPhase} active={inView} touch={touch} cmd={cmd} screenEl={screenEl} onReady={onReady} />}
 
@@ -93,7 +93,7 @@ export default function CarExperience() {
                 <i className="live-dot h-2 w-2 rounded-full bg-volt" />
                 {touch ? "Toque em entrar" : "Clique na porta do motorista ou arraste para girar"}
               </span>
-              <button onClick={enter} className="pointer-events-auto inline-flex h-12 items-center gap-2 rounded-full bg-volt px-6 font-bold text-ink transition-colors hover:bg-white">
+              <button onClick={enter} className="pointer-events-auto inline-flex h-12 items-center gap-2 rounded-full bg-volt px-6 font-bold text-ink transition-colors hover:bg-fg">
                 Entrar no carro →
               </button>
             </motion.div>
@@ -107,10 +107,10 @@ export default function CarExperience() {
               key="in" className="absolute inset-x-0 top-0 flex items-center justify-between gap-2 p-3 sm:p-5"
               initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0, transition: { duration: 0.5, ease } }} exit={{ opacity: 0 }}
             >
-              <button onClick={leave} className="inline-flex h-11 items-center gap-2 rounded-full border border-white/15 bg-ink/70 px-4 text-sm font-semibold backdrop-blur-xl transition-colors hover:border-white/40">
+              <button onClick={leave} className="inline-flex h-11 items-center gap-2 rounded-full border border-fg/15 bg-ink/70 px-4 text-sm font-semibold backdrop-blur-xl transition-colors hover:border-fg/40">
                 ← Sair do carro
               </button>
-              <Link href="/navegador" className="inline-flex h-11 items-center gap-2 rounded-full bg-white px-4 text-sm font-bold text-ink transition-colors hover:bg-volt">
+              <Link href="/navegador" className="inline-flex h-11 items-center gap-2 rounded-full bg-fg px-4 text-sm font-bold text-ink transition-colors hover:bg-volt">
                 Tela cheia ↗
               </Link>
             </motion.div>

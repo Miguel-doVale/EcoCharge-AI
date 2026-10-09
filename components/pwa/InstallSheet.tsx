@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { usePWA, type SheetMode } from "./PWAProvider";
+import { BRAND, BrandMark } from "@/components/brand/Brand";
 
 const DISMISS_KEY = "ecocharge-install-dismissed";
 const DISMISS_DAYS = 7;
@@ -10,11 +11,9 @@ const ease = [0.16, 1, 0.3, 1] as const;
 
 export function AppIcon({ size = 56 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden className="flex-none drop-shadow-[0_8px_24px_rgba(184,255,60,.25)]">
-      <rect width="64" height="64" rx="15" fill="#11161b" />
-      <path d="M32 7c-10.5 0-18.5 8-18.5 18.2C13.5 38.4 32 57 32 57s18.5-18.6 18.5-31.8C50.5 15 42.5 7 32 7z" fill="#b8ff3c" />
-      <path d="M35.2 13.5 23.5 29.2h7.6L28.6 40l12-16.3h-7.7z" fill="#07090b" />
-    </svg>
+    <span className="grid flex-none place-items-center rounded-[26%] shadow-[0_8px_24px_rgba(61,92,63,.35)]" style={{ width: size, height: size, background: BRAND.forest, color: BRAND.sage }}>
+      <BrandMark size={size * 0.86} stroke={4.2} />
+    </span>
   );
 }
 
@@ -33,7 +32,7 @@ function Steps({ items }: { items: React.ReactNode[] }) {
   return (
     <ol className="mt-5 space-y-3">
       {items.map((it, i) => (
-        <motion.li key={i} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 + i * 0.08 }} className="flex items-start gap-3 text-[15px] leading-snug text-white/90">
+        <motion.li key={i} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 + i * 0.08 }} className="flex items-start gap-3 text-[15px] leading-snug text-fg/90">
           <span className="grid h-7 w-7 flex-none place-items-center rounded-full bg-volt font-display text-xs font-semibold text-ink">{i + 1}</span>
           <span className="pt-0.5">{it}</span>
         </motion.li>
@@ -54,7 +53,7 @@ function HelpContent() {
         <Steps items={[<>Toque no menu <b>⋯</b> no canto da tela</>, <>Escolha <b>Abrir no navegador</b> (Chrome ou Safari)</>, <>Toque em <b>Baixar app</b> de novo</>]} />
         <button
           onClick={async () => { try { await navigator.clipboard.writeText(url); setCopied(true); } catch {} }}
-          className="mt-6 h-12 w-full rounded-2xl border border-white/15 font-semibold"
+          className="mt-6 h-12 w-full rounded-2xl border border-fg/15 font-semibold"
         >
           {copied ? "Link copiado ✓" : "Copiar link do app"}
         </button>
@@ -103,16 +102,16 @@ function PromoContent({ onLater }: { onLater: () => void }) {
           <p className="mt-0.5 text-sm text-mist">EcoCharge · grátis · sem loja de apps</p>
         </div>
       </div>
-      <ul className="mt-5 space-y-2.5 text-[15px] text-white/90">
+      <ul className="mt-5 space-y-2.5 text-[15px] text-fg/90">
         {["Abre direto no mapa, em tela cheia", "Carregadores e conectores livres ao vivo", "Ícone na tela inicial, como um app nativo"].map((t) => (
           <li key={t} className="flex items-center gap-2.5"><i className="h-1.5 w-1.5 flex-none rounded-full bg-volt" />{t}</li>
         ))}
       </ul>
       <div className="mt-6 flex gap-2">
-        <button onClick={install} className="h-12 flex-1 rounded-2xl bg-volt font-bold text-ink transition-colors hover:bg-white">
+        <button onClick={install} className="h-12 flex-1 rounded-2xl bg-volt font-bold text-ink transition-colors hover:bg-fg">
           {platform === "ios" ? "Ver como instalar" : "Instalar app"}
         </button>
-        <button onClick={onLater} className="h-12 rounded-2xl px-5 font-semibold text-mist transition-colors hover:text-white">Agora não</button>
+        <button onClick={onLater} className="h-12 rounded-2xl px-5 font-semibold text-mist transition-colors hover:text-fg">Agora não</button>
       </div>
     </>
   );
@@ -151,13 +150,13 @@ export default function InstallSheet({ mode, onClose }: { mode: SheetMode | null
           <motion.div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={dismiss} />
           <motion.div
             role="dialog" aria-modal="true" aria-label="Instalar o app EcoCharge"
-            className="relative w-full max-w-[440px] rounded-t-[28px] border border-white/10 bg-ink-2 p-6 pb-[calc(env(safe-area-inset-bottom,0px)+24px)] text-white shadow-2xl sm:rounded-[28px] sm:pb-6"
+            className="relative w-full max-w-[440px] rounded-t-[28px] border border-fg/10 bg-ink-2 p-6 pb-[calc(env(safe-area-inset-bottom,0px)+24px)] text-fg shadow-2xl sm:rounded-[28px] sm:pb-6"
             initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1, transition: { duration: 0.45, ease } }} exit={{ y: 40, opacity: 0, transition: { duration: 0.2 } }}
             drag="y" dragConstraints={{ top: 0, bottom: 0 }} dragElastic={{ top: 0, bottom: 0.6 }}
             onDragEnd={(_, i) => { if (i.offset.y > 90 || i.velocity.y > 500) dismiss(); }}
           >
-            <span className="mx-auto mb-5 block h-1.5 w-10 rounded-full bg-white/15 sm:hidden" />
-            <button onClick={dismiss} aria-label="Fechar" className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full bg-white/5 text-mist hover:text-white">✕</button>
+            <span className="mx-auto mb-5 block h-1.5 w-10 rounded-full bg-fg/15 sm:hidden" />
+            <button onClick={dismiss} aria-label="Fechar" className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full bg-fg/5 text-mist hover:text-fg">✕</button>
             {mode === "promo" ? <PromoContent onLater={dismiss} /> : <HelpContent />}
           </motion.div>
         </motion.div>

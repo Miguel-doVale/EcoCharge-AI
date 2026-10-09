@@ -14,6 +14,11 @@
   --color-volt: #b8ff3c;
   --color-volt-dim: #8fcc22;
   --color-mist: #a7b0ba;
+  --color-fg: #ffffff;
+  /* status na landing (mais escuros no tema claro) */
+  --color-s-ok: #3ee08f;
+  --color-s-warn: #ffc23d;
+  --color-s-full: #ff5a4a;
 
   /* navegador (status) */
   --color-ok: #1e9e5a;
@@ -51,6 +56,42 @@
   background: var(--ui-bg);
   color: var(--ui-text);
   box-shadow: var(--ui-shadow);
+}
+
+/* ---------- landing: tema claro (paleta da logo) ----------
+   Os utilitários (bg-ink, text-fg, text-volt…) leem estas variáveis, então trocar
+   o tema é só redefini-las. ".site-dark" força o escuro em "telas" (central do carro). */
+:root[data-site-theme="light"] .site {
+  --color-ink: #e2eddf;
+  --color-ink-2: #f1f6ef;
+  --color-ink-3: #d3e2ce;
+  --color-volt: #3d5c3f;
+  --color-volt-dim: #2e4730;
+  --color-mist: #55705a;
+  --color-fg: #1b2d1e;
+  --color-s-ok: #17924f;
+  --color-s-warn: #b97c00;
+  --color-s-full: #cc3a2c;
+}
+:root[data-site-theme="light"] .site .site-dark {
+  --color-ink: #07090b;
+  --color-ink-2: #0e1216;
+  --color-ink-3: #161b21;
+  --color-volt: #b8ff3c;
+  --color-volt-dim: #8fcc22;
+  --color-mist: #a7b0ba;
+  --color-fg: #ffffff;
+  --color-s-ok: #3ee08f;
+  --color-s-warn: #ffc23d;
+  --color-s-full: #ff5a4a;
+}
+:root[data-site-theme="light"]:has(.site),
+:root[data-site-theme="light"] body:has(.site) {
+  background: #e2eddf;
+  color-scheme: light;
+}
+.site {
+  transition: background-color 0.4s, color 0.4s;
 }
 
 html,

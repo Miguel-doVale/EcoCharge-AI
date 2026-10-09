@@ -13,6 +13,13 @@ const CENTER = { x: 1950, y: 1200 }; // em torno do carro (nó 13,8)
 const RADIUS = 1500;
 const STATUS = { ok: "#3ee08f", warn: "#ffc23d", full: "#ff5a4a", off: "#7c8590" } as const;
 
+/* paletas da cena: escuro (noite) e claro (tons da logo) */
+const PAL = {
+  dark: { bg: "#07090b", ground: "#0b0e12", road: "#1a1f25", major: "#2a3038", river: "#0b2a44", riverE: "#0a2238", sky: "#9fb7ff", floor: "#0a0c0f", hemi: 0.55, sun: 1.1, route: "#b8ff3c", ev: "#2fe0c4", bld: [0.07, 0.085, 0.1, 0.05, 0.06, 0.07] },
+  light: { bg: "#e2eddf", ground: "#d6e4d1", road: "#c3d3be", major: "#b2c6ad", river: "#9cc3d6", riverE: "#4d8aa8", sky: "#ffffff", floor: "#a9bfa3", hemi: 1.3, sun: 1.6, route: "#3d5c3f", ev: "#13917c", bld: [0.86, 0.9, 0.84, -0.12, -0.08, -0.12] },
+};
+type Pal = typeof PAL.dark;
+
 const toV = (p: Pt, y = 0) => new THREE.Vector3((p.x - CENTER.x) * S, y, (p.y - CENTER.y) * S);
 const near = (p: Pt, r = RADIUS) => Math.hypot(p.x - CENTER.x, p.y - CENTER.y) < r;
 
@@ -27,7 +34,7 @@ function useWorld() {
   }, []);
 }
 
-function Buildings({ w }: { w: ReturnType<typeof createWorld> }) {
+function Buildings({ w, pal }: { w: ReturnType<typeof createWorld>; pal: Pal }) {
   const ref = useRef<THREE.InstancedMesh>(null);
   const list = useMemo(() => w.buildings.filter((b) => near(b.c[0])), [w]);
   useEffect(() => {
@@ -42,10 +49,11 @@ function Buildings({ w }: { w: ReturnType<typeof createWorld> }) {
       o.scale.set(wdt * S, h * S, dep * S);
       o.updateMatrix(); m.setMatrixAt(i, o.matrix);
       const t = Math.min(1, b.h / 90);
-      m.setColorAt(i, col.setRGB(0.07 + t * 0.05, 0.085 + t * 0.06, 0.1 + t * 0.07));
+      const [r, g, b2, dr, dg, db] = pal.bld;
+      m.setColorAt(i, col.setRGB(r + t * dr, g + t * dg, b2 + t * db));
     });
     m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true;
-  }, [list]);
+  }, [list, pal]);
   return (
     <instancedMesh ref={ref} args={[undefined, undefined, list.length]} castShadow receiveShadow>
       <boxGeometry />
@@ -54,7 +62,7 @@ function Buildings({ w }: { w: ReturnType<typeof createWorld> }) {
   );
 }
 
-function Roads({ w }: { w: ReturnType<typeof createWorld> }) {
+function Roads({ w, pal }: { w: ReturnType<typeof createWorld>; pal: Pal }) {
   const ref = useRef<THREE.InstancedMesh>(null);
   const list = useMemo(() => w.edges.filter((e) => near(w.nodes[e.a]) || near(w.nodes[e.b])), [w]);
   useEffect(() => {
@@ -65,10 +73,10 @@ function Roads({ w }: { w: ReturnType<typeof createWorld> }) {
       o.rotation.set(0, -Math.atan2(b.y - a.y, b.x - a.x), 0);
       o.scale.set((e.len + (e.major ? 18 : 10)) * S, 0.01, (e.major ? 18 : 10) * S);
       o.updateMatrix(); m.setMatrixAt(i, o.matrix);
-      m.setColorAt(i, col.set(e.major ? "#2a3038" : "#1a1f25"));
+      m.setColorAt(i, col.set(e.major ? pal.major : pal.road));
     });
     m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true;
-  }, [list, w]);
+  }, [list, w, pal]);
   return (
     <instancedMesh ref={ref} args={[undefined, undefined, list.length]} receiveShadow>
       <boxGeometry />
@@ -77,7 +85,7 @@ function Roads({ w }: { w: ReturnType<typeof createWorld> }) {
   );
 }
 
-function River() {
+function River({ pal }: { pal: Pal }) {
   const geo = useMemo(() => {
     const shape = new THREE.Shape();
     const x0 = CENTER.x - RADIUS - 400, x1 = CENTER.x + RADIUS + 400;
@@ -89,12 +97,13 @@ function River() {
   }, []);
   return (
     <mesh geometry={geo} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]}>
-      <meshStandardMaterial color="#0b2a44" emissive="#0a2238" emissiveIntensity={0.6} roughness={0.2} metalness={0.4} />
+      <meshStandardMaterial color={pal.river} emissive={pal.riverE} emissiveIntensity={pal === PAL.light ? 0.15 : 0.6} roughness={0.2} metalness={0.4} />
     </mesh>
   );
 }
 
-function ChargerBeacon({ p, color, idx, light }: { p: THREE.Vector3; color: string; idx: number; light: boolean }) {
+function ChargerBeacon({ p, color, idx, light, day }: { p: THREE.Vector3; color: string; idx: number; light: boolean; day: boolean }) {
+  const blend = day ? THREE.NormalBlending : THREE.AdditiveBlending;
   const ring = useRef<THREE.Mesh>(null);
   const beam = useRef<THREE.Mesh>(null);
   useFrame(({ clock }) => {
@@ -106,7 +115,7 @@ function ChargerBeacon({ p, color, idx, light }: { p: THREE.Vector3; color: stri
     <group position={p}>
       <mesh ref={beam} position={[0, 1.6, 0]}>
         <cylinderGeometry args={[0.04, 0.14, 3.2, 16, 1, true]} />
-        <meshBasicMaterial color={color} transparent opacity={0.4} blending={THREE.AdditiveBlending} depthWrite={false} side={THREE.DoubleSide} />
+        <meshBasicMaterial color={color} transparent opacity={0.4} blending={blend} depthWrite={false} side={THREE.DoubleSide} />
       </mesh>
       <mesh position={[0, 0.25, 0]}>
         <sphereGeometry args={[0.16, 20, 20]} />
@@ -115,19 +124,19 @@ function ChargerBeacon({ p, color, idx, light }: { p: THREE.Vector3; color: stri
       {light && <pointLight color={color} intensity={2.2} distance={4} decay={1.6} position={[0, 0.5, 0]} />}
       <mesh ref={ring} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]}>
         <ringGeometry args={[0.3, 0.38, 48]} />
-        <meshBasicMaterial color={color} transparent opacity={0.6} blending={THREE.AdditiveBlending} depthWrite={false} />
+        <meshBasicMaterial color={color} transparent opacity={0.6} blending={blend} depthWrite={false} />
       </mesh>
     </group>
   );
 }
 
-function Chargers({ w }: { w: ReturnType<typeof createWorld> }) {
+function Chargers({ w, day }: { w: ReturnType<typeof createWorld>; day: boolean }) {
   // cada luz pontual pesa em todos os materiais: só os 4 postos mais próximos do centro iluminam o chão
   const list = useMemo(() => w.chargers.filter((c) => near(c.pos)).sort((a, b) => Math.hypot(a.pos.x - CENTER.x, a.pos.y - CENTER.y) - Math.hypot(b.pos.x - CENTER.x, b.pos.y - CENTER.y)), [w]);
-  return <>{list.map((c, i) => <ChargerBeacon key={c.id} idx={i} light={i < 4} p={toV(c.pos)} color={STATUS[level(c)]} />)}</>;
+  return <>{list.map((c, i) => <ChargerBeacon key={c.id} idx={i} light={i < 4 && !day} day={day} p={toV(c.pos)} color={STATUS[level(c)]} />)}</>;
 }
 
-function EVs({ w }: { w: ReturnType<typeof createWorld> }) {
+function EVs({ w, pal }: { w: ReturnType<typeof createWorld>; pal: Pal }) {
   const ref = useRef<THREE.InstancedMesh>(null);
   const o = useMemo(() => new THREE.Object3D(), []);
   useFrame((_, dt) => {
@@ -144,12 +153,12 @@ function EVs({ w }: { w: ReturnType<typeof createWorld> }) {
   return (
     <instancedMesh ref={ref} args={[undefined, undefined, w.evs.length]}>
       <boxGeometry />
-      <meshBasicMaterial color="#2fe0c4" />
+      <meshBasicMaterial color={pal.ev} />
     </instancedMesh>
   );
 }
 
-function MyCar({ route }: { route: NonNullable<ReturnType<typeof buildRoute>> }) {
+function MyCar({ route, pal }: { route: NonNullable<ReturnType<typeof buildRoute>>; pal: Pal }) {
   const car = useRef<THREE.Group>(null);
   const pts = useMemo(() => route.pts.map((p) => toV(p, 0.06)), [route]);
   const curve = useMemo(() => new THREE.CatmullRomCurve3(pts, false, "catmullrom", 0.02), [pts]);
@@ -163,8 +172,8 @@ function MyCar({ route }: { route: NonNullable<ReturnType<typeof buildRoute>> })
   });
   return (
     <>
-      <Line points={pts} color="#b8ff3c" lineWidth={14} transparent opacity={0.18} />
-      <Line points={pts} color="#b8ff3c" lineWidth={5} transparent opacity={0.95} />
+      <Line points={pts} color={pal.route} lineWidth={14} transparent opacity={0.18} />
+      <Line points={pts} color={pal.route} lineWidth={5} transparent opacity={0.95} />
       <Line ref={lineRef} points={pts} color="#ffffff" lineWidth={1.6} dashed dashSize={0.12} gapSize={0.5} transparent opacity={0.85} />
       <group ref={car}>
         <mesh position={[0, 0.06, 0]}>
@@ -200,8 +209,9 @@ function Rig({ scrollRef }: { scrollRef: React.RefObject<number> }) {
   return null;
 }
 
-export default function HeroScene({ scrollRef, active = true }: { scrollRef: React.RefObject<number>; active?: boolean }) {
+export default function HeroScene({ scrollRef, active = true, light = false }: { scrollRef: React.RefObject<number>; active?: boolean; light?: boolean }) {
   const { w, route } = useWorld();
+  const pal = light ? PAL.light : PAL.dark;
   return (
     <Canvas
       // pausa a renderização quando o hero sai da tela
@@ -209,21 +219,23 @@ export default function HeroScene({ scrollRef, active = true }: { scrollRef: Rea
       dpr={[1, 1.5]}
       camera={{ position: [0, 12, 16], fov: 36, near: 0.1, far: 120 }}
       gl={{ antialias: true, powerPreference: "high-performance" }}
-      onCreated={({ gl, scene }) => { gl.toneMapping = THREE.ACESFilmicToneMapping; scene.background = new THREE.Color("#07090b"); }}
+      onCreated={({ gl }) => { gl.toneMapping = THREE.ACESFilmicToneMapping; }}
     >
-      <fog attach="fog" args={["#07090b", 16, 38]} />
-      <hemisphereLight args={["#9fb7ff", "#0a0c0f", 0.55]} />
-      <directionalLight position={[8, 14, 6]} intensity={1.1} color="#dfe8ff" />
+      {/* key: troca de tema recria fundo/névoa/luzes com as cores novas */}
+      <color key={"bg" + pal.bg} attach="background" args={[pal.bg]} />
+      <fog key={"fog" + pal.bg} attach="fog" args={[pal.bg, 16, 38]} />
+      <hemisphereLight key={"h" + pal.bg} args={[pal.sky, pal.floor, pal.hemi]} />
+      <directionalLight position={[8, 14, 6]} intensity={pal.sun} color="#dfe8ff" />
       <mesh rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[80, 80]} />
-        <meshStandardMaterial color="#0b0e12" roughness={1} />
+        <meshStandardMaterial color={pal.ground} roughness={1} />
       </mesh>
-      <River />
-      <Roads w={w} />
-      <Buildings w={w} />
-      <Chargers w={w} />
-      <EVs w={w} />
-      <MyCar route={route} />
+      <River pal={pal} />
+      <Roads w={w} pal={pal} />
+      <Buildings w={w} pal={pal} />
+      <Chargers w={w} day={light} />
+      <EVs w={w} pal={pal} />
+      <MyCar route={route} pal={pal} />
       <Rig scrollRef={scrollRef} />
     </Canvas>
   );

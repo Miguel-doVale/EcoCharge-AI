@@ -34,7 +34,7 @@ export default function SplineStage() {
   }, [state]);
 
   return (
-    <section id="painel" className="relative bg-ink px-3 py-24 text-white sm:px-5 md:py-36">
+    <section id="painel" className="relative bg-ink px-3 py-24 text-fg sm:px-5 md:py-36">
       <div className="mx-auto mb-12 max-w-[1320px] px-2 sm:px-3 md:mb-16 md:flex md:items-end md:justify-between md:gap-10">
         <h2 className="max-w-[16ch] font-display text-[clamp(2rem,4.4vw,3.8rem)] font-semibold leading-[1.02] tracking-[-0.03em]">
           Feito para a central do carro.
@@ -47,7 +47,7 @@ export default function SplineStage() {
       <motion.div
         ref={ref}
         style={{ scale, borderRadius: radius }}
-        className="relative mx-auto h-[min(78vh,760px)] max-w-[1400px] overflow-hidden border border-white/10 bg-[radial-gradient(80%_70%_at_50%_40%,#1b232c_0%,#0b0e12_70%)]"
+        className="relative mx-auto h-[min(78vh,760px)] max-w-[1400px] overflow-hidden border border-fg/10 bg-[radial-gradient(80%_70%_at_50%_40%,#1b232c_0%,#0b0e12_70%)]"
       >
         {(state === "loading" || state === "ready") && (
           <Spline scene={SCENE} onLoad={() => setState("ready")} className="absolute inset-0" />
@@ -55,16 +55,16 @@ export default function SplineStage() {
         {state !== "ready" && (
           <div className="absolute inset-0 grid place-items-center">
             {state === "failed" ? (
-              <p className="max-w-[36ch] text-center text-mist">Não foi possível carregar a cena 3D. Confira a URL em <code className="text-white">NEXT_PUBLIC_SPLINE_SCENE</code>.</p>
+              <p className="max-w-[36ch] text-center text-mist">Não foi possível carregar a cena 3D. Confira a URL em <code className="text-fg">NEXT_PUBLIC_SPLINE_SCENE</code>.</p>
             ) : (
-              <motion.div className="h-14 w-14 rounded-full border-2 border-white/10 border-t-volt" animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }} />
+              <motion.div className="h-14 w-14 rounded-full border-2 border-fg/10 border-t-volt" animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }} />
             )}
           </div>
         )}
         {CALLOUTS.map((c, i) => (
           <motion.div
             key={c.t}
-            className={`pointer-events-none absolute hidden max-w-[260px] rounded-2xl border border-white/10 bg-ink/60 p-4 backdrop-blur-xl md:block ${c.pos}`}
+            className={`pointer-events-none absolute hidden max-w-[260px] rounded-2xl border border-fg/10 bg-ink/60 p-4 backdrop-blur-xl md:block ${c.pos}`}
             initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-15%" }}
             transition={{ delay: 0.2 + i * 0.15, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
           >

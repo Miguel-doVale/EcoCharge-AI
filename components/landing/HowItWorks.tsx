@@ -7,13 +7,14 @@ import { useGSAP } from "@gsap/react";
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
 
+// a ordem segue as camadas da animação; cada passo diz a qual movimento do pitch pertence
 const STEPS = [
-  { k: "Mapa", t: "Um mapa de verdade, não um dashboard", d: "Ruas, quarteirões, rio e parques reconhecíveis. Arraste, dê zoom com pinça e veja seu BYD no centro, com orientação." },
-  { k: "Veículos próximos", t: "EVs como marcadores discretos", d: "Carros elétricos aparecem como setas pequenas. Ao afastar o zoom, viram clusters com contagem para não poluir a navegação." },
-  { k: "Carregadores", t: "Prioridade para quem carrega", d: "Cada posto tem um marcador com o número de vagas livres. Eles continuam visíveis mesmo com o zoom bem afastado." },
-  { k: "Disponibilidade ao vivo", t: "Verde, amarelo, vermelho", d: "Status atualizado a cada poucos segundos via OCPI: com vagas, quase cheio ou lotado. O marcador pulsa quando muda." },
-  { k: "Seleção do posto", t: "Conector por conector", d: "Ao tocar, abre o card: conectores totais, livres, ocupados, kW máximo e a previsão de quando cada um libera." },
-  { k: "Navegação", t: "Rota até a tomada", d: "Rota pelas ruas, tempo, chegada e bateria estimada. Instruções curva a curva e a câmera segue o carro em perspectiva." },
+  { k: "Mapa", m: "Integrar", t: "Um mapa de verdade, não um dashboard", d: "Ruas, quarteirões, rio e parques reconhecíveis, com o seu carro no centro e orientado." },
+  { k: "Veículos próximos", m: "Integrar", t: "EVs como marcadores discretos", d: "Carros elétricos aparecem como setas pequenas e viram clusters ao afastar o zoom." },
+  { k: "Carregadores", m: "Integrar", t: "Todas as redes num mapa só", d: "Postos de redes diferentes na mesma camada, com o número de vagas livres no marcador." },
+  { k: "Disponibilidade ao vivo", m: "Prever", t: "Verde, amarelo, vermelho", d: "Com vagas, quase cheio ou lotado, atualizado a cada poucos segundos. O próximo passo é prever a fila antes dela se formar." },
+  { k: "Seleção do posto", m: "Prever", t: "Conector por conector", d: "Conectores livres e ocupados, potência máxima e a previsão de quando cada um libera." },
+  { k: "Navegação", m: "Calcular", t: "Rota até a tomada", d: "Rota mais eficiente pelas ruas, com tempo, chegada e a bateria estimada ao chegar." },
 ];
 
 const PINS = [
@@ -49,32 +50,41 @@ export default function HowItWorks() {
   }, { scope: root });
 
   return (
-    <section id="como-funciona" ref={root} className="relative bg-ink text-white">
-      <div className="hiw-pin mx-auto grid min-h-[100svh] max-w-[1320px] items-center gap-12 px-5 py-24 sm:px-8 min-[900px]:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] min-[900px]:py-0">
+    <section id="como-funciona" ref={root} className="relative bg-ink text-fg">
+      <div className="hiw-pin mx-auto grid min-h-[100svh] max-w-[1384px] items-center gap-12 px-5 py-24 sm:px-8 min-[900px]:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] min-[900px]:py-0">
         <div>
           <p className="mb-4 text-sm font-semibold uppercase tracking-[0.18em] text-volt">Como funciona</p>
           <h2 className="font-display text-[clamp(2rem,4vw,3.4rem)] font-semibold leading-[1.02] tracking-[-0.03em]">
-            Do mapa à tomada, <span className="text-mist">em seis camadas.</span>
+            Prever. Calcular. Integrar.
           </h2>
-          <ol className="mt-10 space-y-1">
-            {STEPS.map((s, i) => (
-              <li key={s.k} className={`border-l-2 py-3 pl-5 transition-all duration-500 ${i === active ? "border-volt" : "border-white/10 min-[900px]:opacity-40"}`}>
-                <div className="flex items-baseline gap-3">
-                  <span className="font-display text-xs text-mist tabular">0{i + 1}</span>
-                  <span className="text-lg font-semibold">{s.t}</span>
-                </div>
-                <p className={`grid transition-all duration-500 ${i === active ? "mt-1.5 grid-rows-[1fr]" : "grid-rows-[1fr] min-[900px]:grid-rows-[0fr]"}`}>
-                  <span className="overflow-hidden text-[15px] leading-relaxed text-mist">{s.d}</span>
-                </p>
-              </li>
-            ))}
+          <p className="mt-4 text-lg text-mist">Três movimentos. Uma rede só.</p>
+          <ol className="mt-8 space-y-1">
+            {STEPS.map((s, i) => {
+              const on = i === active, done = i < active;
+              return (
+                <li key={s.k} className={`relative overflow-hidden rounded-2xl border py-3 pl-5 pr-4 transition-all duration-500 ${on ? "border-volt/25 bg-volt/[.06]" : "border-transparent min-[900px]:opacity-50"}`}>
+                  {/* barra de progresso da etapa */}
+                  <span className={`absolute inset-y-3 left-0 w-[3px] rounded-full transition-colors duration-500 ${on ? "bg-volt" : done ? "bg-volt/40" : "bg-fg/10"}`} />
+                  <div className="flex items-center gap-3.5">
+                    <span className={`grid h-7 w-7 flex-none place-items-center rounded-full font-display text-[11px] font-semibold tabular transition-colors duration-500 ${on ? "bg-volt text-ink" : done ? "bg-volt/15 text-volt" : "bg-fg/[.06] text-mist"}`}>0{i + 1}</span>
+                    <span className="min-w-0">
+                      <span className={`block text-[10px] font-semibold uppercase tracking-[0.16em] transition-colors duration-500 ${on ? "text-volt" : "text-mist"}`}>{s.m}</span>
+                      <span className="block text-lg font-semibold leading-snug">{s.t}</span>
+                    </span>
+                  </div>
+                  <p className={`grid transition-all duration-500 ${on ? "mt-2 grid-rows-[1fr]" : "mt-2 grid-rows-[1fr] min-[900px]:mt-0 min-[900px]:grid-rows-[0fr]"}`}>
+                    <span className="overflow-hidden pl-[42px] text-[15px] leading-relaxed text-volt">{s.d}</span>
+                  </p>
+                </li>
+              );
+            })}
           </ol>
         </div>
 
         {/* "tela" da central multimídia */}
-        <div className="hiw-screen relative">
+        <div className="hiw-screen site-dark relative">
           <div className="pointer-events-none absolute -inset-3 rounded-[48px] sm:-inset-10 bg-[radial-gradient(closest-side,rgba(184,255,60,.12),transparent)]" />
-          <div className="relative rounded-[28px] border border-white/10 bg-gradient-to-b from-[#1a1f26] to-[#0c0f13] p-3 shadow-[0_40px_120px_-30px_rgba(0,0,0,.9)]">
+          <div className="relative rounded-[28px] border border-fg/10 bg-gradient-to-b from-[#1a1f26] to-[#0c0f13] p-3 shadow-[0_40px_120px_-30px_rgba(0,0,0,.9)]">
             <div className="relative aspect-[16/10] overflow-hidden rounded-[20px] bg-[#161a20]">
               <svg viewBox="0 0 640 400" className="absolute inset-0 h-full w-full" aria-label="Ilustração do navegador montando camadas">
                 {/* camada 1: mapa */}
@@ -123,13 +133,13 @@ export default function HowItWorks() {
                 <div className="text-[10px] text-[#9ea6b1] sm:text-xs">Recarga Já · Av. Brasil</div>
                 <div className="mt-2 grid grid-cols-4 divide-x divide-[#2e3540] rounded-lg border border-[#2e3540] text-center">
                   {[["6", "conect."], ["4", "livres"], ["2", "ocup."], ["120", "kW"]].map(([n, l], i) => (
-                    <div key={l} className="py-1"><b className={`block text-sm sm:text-lg ${i === 1 ? "text-[#3ee08f]" : i === 2 ? "text-[#ff5a4a]" : ""}`}>{n}</b><span className="text-[9px] text-[#9ea6b1] sm:text-[10px]">{l}</span></div>
+                    <div key={l} className="py-1"><b className={`block text-sm sm:text-lg ${i === 1 ? "text-s-ok" : i === 2 ? "text-s-full" : ""}`}>{n}</b><span className="text-[9px] text-[#9ea6b1] sm:text-[10px]">{l}</span></div>
                   ))}
                 </div>
                 <div className="mt-2 rounded-lg bg-[#2f6fe4] py-1.5 text-center text-[11px] font-bold sm:text-sm">Traçar rota · 3 min</div>
               </div>
               {/* camada 6: faixa de instrução */}
-              <div className="l-banner absolute left-3 right-3 top-3 flex items-center gap-3 rounded-2xl bg-[#0b6e4f] px-3.5 py-2.5 text-white opacity-0 sm:right-auto sm:w-[60%]">
+              <div className="l-banner absolute left-3 right-3 top-3 flex items-center gap-3 rounded-2xl bg-[#0b6e4f] px-3.5 py-2.5 text-fg opacity-0 sm:right-auto sm:w-[60%]">
                 <svg width="30" height="30" viewBox="0 0 48 48" aria-hidden><path d="M14 40V24a6 6 0 0 1 6-6h16" fill="none" stroke="#fff" strokeWidth="5" strokeLinecap="round" /><path d="M30 10l9 8-9 8" fill="none" stroke="#fff" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" /></svg>
                 <div><div className="text-lg font-extrabold leading-none">120 m</div><div className="text-xs font-semibold opacity-90 sm:text-sm">Vire à direita na Av. Brasil</div></div>
               </div>

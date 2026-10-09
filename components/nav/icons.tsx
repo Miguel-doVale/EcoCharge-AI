@@ -76,3 +76,13 @@ export function TurnGlyph({ icon, size = 48 }: { icon: TurnIcon; size?: number }
     </svg>
   );
 }
+
+/** marca da EcoCharge AI nas recomendações */
+export function SparkIcon({ size = 18, className = "" }: { size?: number; className?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden>
+      <path d="M12 2.5c.5 4.6 2.4 6.9 7.5 8-5.1 1.1-7 3.4-7.5 8-.5-4.6-2.4-6.9-7.5-8 5.1-1.1 7-3.4 7.5-8z" />
+      <path d="M19 15.5c.2 1.7.9 2.5 2.6 2.9-1.7.4-2.4 1.2-2.6 2.9-.2-1.7-.9-2.5-2.6-2.9 1.7-.4 2.4-1.2 2.6-2.9z" opacity=".7" />
+    </svg>
+  );
+}

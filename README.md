@@ -44,6 +44,31 @@ npm run build      # build de produção
 - Recarga simulada com potência efetiva, kWh adicionados, custo em R$ e queda de potência acima de 80%.
 - Filtros, busca, modo dia/noite (salvo no navegador) e layout de painel lateral em telas largas.
 
+## EcoCharge AI: recomendação de posto
+
+O núcleo do produto, simulado de ponta a ponta no navegador (`lib/ev/recommend.ts`).
+
+**O que ela prevê.** Para cada posto, o estado **no horário em que você chegaria**:
+1. conectores compatíveis com o seu carro e quando cada um libera;
+2. os carros da rede EcoCharge que já estão indo para lá, ocupando os conectores na ordem de chegada;
+3. carros de fora da rede, pela ocupação típica daquele horário (chegadas aleatórias, modelo de Poisson).
+
+O resultado é a **chance de vaga na chegada** e a **espera prevista**.
+
+**Regras de serviço** (valores em `CFG.ia`, `lib/ev/config.ts`):
+- Só conectores compatíveis com o carro, com a potência limitada pelo que o carro aceita (BYD Dolphin: CCS2 até 88 kW, Tipo 2 até 7 kW).
+- Reserva de segurança: só indica postos onde se chega com pelo menos 10%. Em **bateria crítica** (nenhum posto respeita a reserva), aceita até 3% e escolhe o caminho mais curto.
+- Descarta postos com chance de vaga abaixo de 50% **e** espera acima de 15 min, ou espera acima de 15 min.
+- **Coordenação da rede:** ao iniciar a navegação, a chegada prevista do carro entra na rede; as próximas recomendações (de qualquer carro) já contam com ela. Assim a IA não manda dois carros para a mesma tomada. A vaga prevista expira 10 min após o horário de chegada.
+- Pedidos simultâneos: quem tem menos bateria é atendido primeiro.
+- Critério: menor tempo até sair carregado (trajeto + espera + recarga até 80%); empate, o mais barato.
+- Durante a viagem, se o destino passar a lotar, sugere trocar quando o ganho passa de 3 min. Se o motorista recusar, não insiste para o mesmo destino.
+- Alerta automático abaixo de 25% de bateria.
+
+**Frota simulada.** Os outros EVs gastam bateria, pedem recomendação à mesma IA abaixo de 18%, vão até o posto pelas ruas reais (setas âmbar), ocupam um conector, carregam e voltam a circular. Toque numa seta âmbar para ver para onde ela está indo.
+
+**Demonstração.** Toque no chip de bateria (topo) para simular outro nível e ver a recomendação mudar. O carro já abre com 22%.
+
 ## Estrutura
 
 ```
@@ -58,6 +83,7 @@ components/
 lib/ev/
   config.ts             ⚙️  configuração: carro, bateria, quantidades, velocidades, cores, nomes
   realworld.ts          malha viária real, carregadores em lugares reais, EVs, rota e instruções
+  recommend.ts          EcoCharge AI: previsão de vaga na chegada e ranking de postos
   world.ts              cidade gerada usada na cena 3D da landing + perfil dos carregadores
   engine.ts             simulação, mapa (MapLibre), camada própria em canvas e store da UI
   format.ts             formatação de distância, tempo, kW e horário

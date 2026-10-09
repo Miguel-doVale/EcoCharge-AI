@@ -16,7 +16,7 @@ export type Edge = {
 };
 export type ConnectorType = "CCS2" | "CHAdeMO" | "GB/T" | "Tipo 2";
 export type ConnectorStatus = "livre" | "ocupado" | "offline" | "reservado" | "voce";
-export type Connector = { n: number; type: ConnectorType; kw: number; st: ConnectorStatus; eta: number };
+export type Connector = { n: number; type: ConnectorType; kw: number; st: ConnectorStatus; eta: number; ev?: number /* EV da frota ocupando */ };
 export type Charger = {
   id: number; name: string; op: string; addr: string; pos: Pt; node: number;
   cons: Connector[]; price: string; open24: boolean; amenities: string[];

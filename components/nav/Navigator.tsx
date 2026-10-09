@@ -8,7 +8,7 @@ import { useGSAP } from "@gsap/react";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { EVEngine, type Filter } from "@/lib/ev/engine";
 import type { RoadData } from "@/lib/ev/realworld";
-import { COR_STATUS } from "@/lib/ev/config";
+import { CFG, COR_STATUS } from "@/lib/ev/config";
 import { EngineContext, useEngine, useUI } from "./engine-context";
 import { BackIcon, CarIcon, LocateIcon, MinusIcon, MoonIcon, PlusIcon, SearchIcon, SunIcon, TurnGlyph } from "./icons";
 import { SheetContent } from "./SheetViews";
@@ -99,7 +99,7 @@ function NavigatorShell() {
         )}
       </AnimatePresence>
 
-      <div ref={topRef} className="pointer-events-none fixed inset-x-0 top-0 z-20 px-3 pt-[calc(env(safe-area-inset-top,0px)+12px)] min-[900px]:right-auto min-[900px]:w-[436px]">
+      <div ref={topRef} className="pointer-events-none fixed inset-x-0 top-0 z-30 px-3 pt-[calc(env(safe-area-inset-top,0px)+12px)] min-[900px]:right-auto min-[900px]:w-[436px]">
         <AnimatePresence mode="wait" initial={false}>
           {mode === "nav" ? <NavBanner key="nav" /> : <TopBar key="top" />}
         </AnimatePresence>
@@ -165,17 +165,52 @@ function TopBar() {
 }
 
 function Battery() {
+  const engine = useEngine();
   const batt = useUI((s) => s.batt);
   const range = useUI((s) => s.range);
+  const mode = useUI((s) => s.mode);
+  const [open, setOpen] = useState(false);
+  const wrap = useRef<HTMLDivElement>(null);
   const b = Math.max(0, Math.min(100, batt));
   const color = b < 20 ? COR_STATUS.full : b < 35 ? COR_STATUS.warn : COR_STATUS.ok;
+  const canEdit = mode !== "nav" && mode !== "charging";
+  useEffect(() => {
+    if (!open) return;
+    const off = (e: PointerEvent) => { if (!wrap.current?.contains(e.target as Node)) setOpen(false); };
+    addEventListener("pointerdown", off); return () => removeEventListener("pointerdown", off);
+  }, [open]);
   return (
-    <div className="ui-card tabular flex h-[50px] flex-none items-center gap-2 rounded-full pl-3 pr-3.5" aria-label={`Bateria ${Math.round(b)}%, autonomia ${Math.round(range)} km`}>
-      <div className="relative h-[13px] w-[26px] rounded-[4px] border-2 border-current after:absolute after:-right-[5px] after:top-[2.5px] after:h-1 after:w-[3px] after:rounded-r-sm after:bg-current">
-        <motion.i className="absolute bottom-px left-px top-px rounded-[1.5px]" animate={{ width: `calc(${b}% - 2px)`, backgroundColor: color }} transition={{ duration: 0.4 }} />
-      </div>
-      <b className="text-[15px] font-bold">{Math.round(b)}%</b>
-      <span className="hidden text-[13px] text-[var(--ui-muted)] min-[380px]:inline">{Math.round(range)} km</span>
+    <div ref={wrap} className="relative flex-none">
+      <button
+        onClick={() => canEdit && setOpen((v) => !v)} aria-expanded={open}
+        className="ui-card tabular flex h-[50px] items-center gap-2 rounded-full pl-3 pr-3.5"
+        aria-label={`Bateria ${Math.round(b)}%, autonomia ${Math.round(range)} km. Toque para simular outro nível.`}
+      >
+        <div className="relative h-[13px] w-[26px] rounded-[4px] border-2 border-current after:absolute after:-right-[5px] after:top-[2.5px] after:h-1 after:w-[3px] after:rounded-r-sm after:bg-current">
+          <motion.i className="absolute bottom-px left-px top-px rounded-[1.5px]" animate={{ width: `calc(${b}% - 2px)`, backgroundColor: color }} transition={{ duration: 0.4 }} />
+        </div>
+        <b className="text-[15px] font-bold">{Math.round(b)}%</b>
+        <span className="hidden text-[13px] text-[var(--ui-muted)] min-[380px]:inline">{Math.round(range)} km</span>
+      </button>
+      {/* demonstração: simular outro nível de bateria e ver a recomendação mudar */}
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: -6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6 }}
+            className="ui-card absolute right-0 top-[58px] z-30 w-[240px] rounded-2xl p-3.5"
+          >
+            <div className="mb-2 flex items-baseline justify-between text-[13px]">
+              <b>Simular bateria</b><span className="text-[var(--ui-muted)]">demo</span>
+            </div>
+            <input
+              type="range" min={3} max={100} value={Math.round(b)} aria-label="Nível de bateria"
+              onChange={(e) => engine.setBattery(Number(e.target.value))}
+              className="w-full accent-[var(--color-route)]"
+            />
+            <p className="mt-1.5 text-[12px] leading-snug text-[var(--ui-muted)]">Abaixo de {CFG.ia.bateriaAlerta}% a EcoCharge AI entra em alerta e recomenda o melhor posto.</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

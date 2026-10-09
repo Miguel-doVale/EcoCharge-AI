@@ -1,5 +1,6 @@
 /* Texturas procedurais (canvas): nada é baixado da internet. */
 import * as THREE from "three";
+import { CFG } from "@/lib/ev/config";
 
 function canvasTex(w: number, h: number, draw: (g: CanvasRenderingContext2D) => void, repeat?: [number, number], color = true) {
   const c = document.createElement("canvas"); c.width = w; c.height = h;
@@ -88,8 +89,10 @@ export function clusterTexture() {
     g.fillStyle = "#e9f2f1"; g.font = "700 84px system-ui, sans-serif"; g.textAlign = "center"; g.fillText("0", 256, 112);
     g.font = "500 22px system-ui, sans-serif"; g.fillStyle = "#8fa0a8"; g.fillText("km/h", 256, 146);
     g.textAlign = "left"; g.fillStyle = "#2fd3c0"; g.font = "700 30px system-ui, sans-serif"; g.fillText("P", 40, 108);
-    g.textAlign = "right"; g.fillStyle = "#e9f2f1"; g.font = "600 30px system-ui, sans-serif"; g.fillText("38%", 470, 92);
-    g.fillStyle = "#8fa0a8"; g.font = "500 20px system-ui, sans-serif"; g.fillText("148 km", 470, 124);
-    g.fillStyle = "#1e9e5a"; g.fillRect(360, 150, 110 * 0.38, 8); g.strokeStyle = "#3a4650"; g.strokeRect(360, 150, 110, 8);
+    // mesma bateria com que o navegador abre (CFG.veiculo)
+    const v = CFG.veiculo, batt = v.bateriaInicial, km = Math.round((batt / 100) * v.bateriaKWh / v.consumoKWhKm);
+    g.textAlign = "right"; g.fillStyle = "#e9f2f1"; g.font = "600 30px system-ui, sans-serif"; g.fillText(`${batt}%`, 470, 92);
+    g.fillStyle = "#8fa0a8"; g.font = "500 20px system-ui, sans-serif"; g.fillText(`${km} km`, 470, 124);
+    g.fillStyle = batt < CFG.ia.bateriaAlerta ? "#d99a04" : "#1e9e5a"; g.fillRect(360, 150, 110 * (batt / 100), 8); g.strokeStyle = "#3a4650"; g.strokeRect(360, 150, 110, 8);
   });
 }

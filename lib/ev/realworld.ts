@@ -17,7 +17,13 @@ export type RoadData = {
 
 export type Road = { a: number; b: number; cls: number; major: boolean; name: string | null; oneway: boolean; pts: Pt[]; cl: number[]; len: number };
 export type Link = { to: number; ei: number; fwd: boolean };
-export type RealEV = { ei: number; fwd: boolean; s: number; prev: number; speed: number; model: string; batt: number; x: number; y: number; h: number };
+export type Leg = { ei: number; fwd: boolean };
+/** EV da frota. "livre" circula; "indo" segue a rota da EcoCharge AI até um posto;
+    "fila" espera um conector; "carregando" está no posto (some do mapa). */
+export type RealEV = {
+  id: number; ei: number; fwd: boolean; s: number; prev: number; speed: number; model: string; batt: number; x: number; y: number; h: number;
+  mode: "livre" | "indo" | "fila" | "carregando"; target?: number; legs?: Leg[]; leg?: number; arrived?: boolean; since?: number;
+};
 
 /** velocidade média por classe de via (m/s): arterial, coletora, local-principal, local */
 const SPEED = [15, 12, 10, 7];
@@ -107,7 +113,7 @@ export function createRealWorld(data: RoadData, seed = CFG.seed) {
     let ei = Math.floor(R() * edges.length);
     for (let g = 0; g < 20 && edges[ei].cls === 3 && R() < 0.6; g++) ei = Math.floor(R() * edges.length); // mais EVs nas avenidas
     const e = edges[ei], fwd = e.oneway || R() < 0.5;
-    evs.push({ ei, fwd, s: R() * e.len, prev: fwd ? e.a : e.b, speed: 6 + R() * 8, model: pick(MODELOS_EV), batt: 15 + Math.floor(R() * 80), x: 0, y: 0, h: 0 });
+    evs.push({ id: k, ei, fwd, s: R() * e.len, prev: fwd ? e.a : e.b, speed: 6 + R() * 8, model: pick(MODELOS_EV), batt: 15 + R() * 80, x: 0, y: 0, h: 0, mode: "livre" });
   }
 
   return { R, pick, nodes, edges, adj, nearestNode, chargers, evs, toLngLat, fromLngLat, start: fromLngLat(START.lon, START.lat), bbox: data.bbox };
@@ -244,10 +250,26 @@ export function buildRoute(w: RealWorld, from: Pt, c: Charger): Route | null {
   return { c, pts, cum, total, steps, first };
 }
 
+/** trechos do caminho mais rápido de `src` até `dst` (resultado de dijkstra a partir de src) */
+export function legsTo(r: Reach, src: number, dst: number): Leg[] | null {
+  if (!isFinite(r.t[dst])) return null;
+  const legs: Leg[] = [];
+  for (let k = dst; k !== src; k = r.prev[k]) legs.push({ ei: r.via[k], fwd: !!r.viaFwd[k] });
+  return legs.reverse();
+}
+
 export function stepEV(w: RealWorld, c: RealEV, dt: number) {
+  if (c.mode === "fila" || c.mode === "carregando") return;
   c.s += c.speed * dt;
   let e = w.edges[c.ei];
   while (c.s >= e.len) {
+    // seguindo a rota da EcoCharge AI até o posto
+    if (c.legs) {
+      if (c.leg! + 1 >= c.legs.length) { c.s = e.len; c.arrived = true; break; }
+      c.s -= e.len; c.leg!++;
+      const lg = c.legs[c.leg!]; c.ei = lg.ei; c.fwd = lg.fwd; e = w.edges[c.ei];
+      continue;
+    }
     c.s -= e.len;
     const end = c.fwd ? e.b : e.a;
     const opts = w.adj[end].filter((o) => o.ei !== c.ei);

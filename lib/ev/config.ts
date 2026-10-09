@@ -13,12 +13,36 @@ export const CFG = {
     nome: "BYD Dolphin",
     bateriaKWh: 60.48,
     consumoKWhKm: 0.155,
-    bateriaInicial: 38,
+    bateriaInicial: 22, // abaixo de ia.bateriaAlerta: a recomendação já aparece ao abrir
+    potenciaDC: 88, // kW máximos que o carro aceita em carregador rápido (CCS2)
+    potenciaAC: 7, // kW máximos em carregador lento (Tipo 2)
+    conectores: ["CCS2", "Tipo 2"], // tipos compatíveis com o carro
   },
-  velocidadeSimulacao: 42, // m/s do carro na navegação simulada (acelerada)
+  /* relógio da simulação: cada segundo real vale este tanto de minutos simulados.
+     Conectores liberando, filas e previsões andam nesse relógio. */
+  minutosPorSegundo: 0.1,
   velocidadeMedia: 8.3, // m/s usada no tempo estimado (~30 km/h)
+  // o carro anda na navegação exatamente no relógio da simulação (8,3 × 60 × 0,1)
+  velocidadeSimulacao: 49.8,
   aceleracaoRecarga: 25, // multiplica a velocidade da recarga simulada
   intervaloAoVivo: 2600, // ms entre atualizações de status dos conectores
+
+  /* ---------- EcoCharge AI: regras da recomendação ---------- */
+  ia: {
+    bateriaAlerta: 25, // % em que a recomendação é disparada automaticamente
+    reservaSeguranca: 10, // prefere postos onde se chega com pelo menos isto
+    bateriaCritica: 3, // abaixo disso na chegada, nunca (vale quando nenhum posto respeita a reserva)
+    metaRecarga: 80, // a recomendação considera carregar até aqui (acima, a potência cai)
+    chanceMinima: 0.5, // chance mínima de achar vaga na chegada
+    esperaMaxima: 15, // min de espera prevista acima disso o posto é descartado
+    toleranciaChegada: 10, // min após o horário previsto em que a vaga prevista ainda vale
+    ganhoTroca: 3, // min de ganho mínimo para sugerir trocar de posto no caminho
+    // frota simulada (os outros carros também usam a EcoCharge AI)
+    bateriaBusca: 18, // abaixo disso os outros EVs pedem recomendação e vão carregar
+    maxBuscando: 12, // máximo de EVs da frota indo carregar ao mesmo tempo
+    descargaFrota: 8, // acelera o gasto de bateria da frota para a dinâmica aparecer na demo
+    potenciaFrota: 100, // kW máximos que os outros EVs aceitam
+  },
   reservaMin: 15, // minutos que uma reserva segura o conector
   zoomMin: 0.12,
   zoomMax: 3.2,

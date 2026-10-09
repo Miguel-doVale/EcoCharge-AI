@@ -8,7 +8,8 @@
 import * as maplibregl from "maplibre-gl";
 import { CFG, COR_STATUS, PALETA_DIA, PALETA_NOITE, type Palette } from "./config";
 import { clamp, dist, level, stats, type Charger, type Connector, type Pt } from "./world";
-import { buildRoute, createRealWorld, dijkstra, stepEV, type Reach, type RealEV, type RealWorld, type RoadData, type Route } from "./realworld";
+import { buildRoute, createRealWorld, dijkstra, legsTo, stepEV, type Reach, type RealEV, type RealWorld, type RoadData, type Route } from "./realworld";
+import { backgroundRate, chargeMinutes, forecast, powerOn, recommend, type Car, type Forecast, type ForecastOpts, type Intent, type Rec } from "./recommend";
 import { clock, fmtDist, fmtMin } from "./format";
 
 export type Mode = "list" | "detail" | "preview" | "nav" | "arrived" | "charging";
@@ -37,6 +38,14 @@ export type UIState = {
   charge: ChargeInfo | null;
   reservation: Reservation | null;
   toast: { id: number; msg: string } | null;
+  /** bateria baixa: a recomendação da EcoCharge AI ganha destaque */
+  aiAlert: boolean;
+  /** posto escolhido pela recomendação (marca a prévia da rota) */
+  aiPick: number | null;
+  /** previsão para o destino durante a navegação */
+  navFc: Forecast | null;
+  /** destino deve lotar: alternativa sugerida no caminho */
+  navAlt: { chargerId: number; gain: number; why: string } | null;
 };
 
 export type Insets = { l: number; t: number; r: number; b: number };
@@ -78,6 +87,12 @@ export class EVEngine {
   private insetsProvider: () => Insets = () => ({ l: 0, t: 0, r: 0, b: 0 });
   private lastInsetB = -1;
   private cleanup: (() => void)[] = [];
+  /** relógio da simulação (min) e chegadas previstas registradas na rede EcoCharge */
+  simMin = 0;
+  intents: Intent[] = [];
+  private recCache: { key: string; recs: Rec[] } | null = null;
+  private alerted = false;
+  private altMuted: number | null = null; // destino em que o motorista recusou trocar
 
   constructor(data: RoadData) {
     this.w = createRealWorld(data);
@@ -89,6 +104,7 @@ export class EVEngine {
     this.state = {
       mode: "list", selId: null, filters: [], query: "", showEV: true, follow: true, dark: false,
       batt: this.car.batt, range: this.rangeKm(), rev: 0, nav: null, charge: null, reservation: null, toast: null,
+      aiAlert: false, aiPick: null, navFc: null, navAlt: null,
     };
   }
 
@@ -118,6 +134,60 @@ export class EVEngine {
       .map((c) => { const d = this.distTo(c); return { c, d, t: d / CFG.velocidadeMedia }; })
       .sort((a, b) => a.d - b.d);
   }
+
+  /* ---------------- EcoCharge AI ---------------- */
+  carSpec(batt = this.car.batt): Car {
+    const v = CFG.veiculo;
+    return { batt, types: v.conectores, dc: v.potenciaDC, ac: v.potenciaAC, capKWh: v.bateriaKWh };
+  }
+  /** minutos de direção no relógio da simulação */
+  driveMin(m: number) { return m / CFG.velocidadeMedia / 60; }
+  private fcOpts(forMe: boolean): ForecastOpts {
+    return {
+      hour: new Date().getHours(),
+      reservedUntil: (x) => {
+        const r = this.state.reservation;
+        if (!r || !this.w.chargers[r.chargerId].cons.includes(x)) return null;
+        return forMe ? -1 : ((r.until - Date.now()) / 1000) * CFG.minutosPorSegundo;
+      },
+    };
+  }
+  /** postos ranqueados para o seu carro, agora (recalcula a cada atualização ao vivo) */
+  recommendations(): Rec[] {
+    const key = `${this.state.rev}:${Math.round(this.car.batt)}:${this.car.node}`;
+    if (this.recCache?.key !== key)
+      this.recCache = { key, recs: recommend(this.w.chargers, this.carSpec(), this.simMin, this.intents, "me", (c) => this.distTo(c), (m) => this.driveMin(m), this.fcOpts(true)) };
+    return this.recCache.recs;
+  }
+  /** previsão de um posto para a sua chegada */
+  forecastFor(c: Charger) {
+    const d = this.distTo(c);
+    return forecast(c, this.carSpec(this.batteryAfter(d)), this.simMin, this.simMin + this.driveMin(d), this.intents, "me", this.fcOpts(true));
+  }
+  /** carros da rede indo para o posto agora */
+  incomingTo(c: Charger) { return this.intents.filter((i) => i.chargerId === c.id && i.who !== "me").length; }
+  goRecommended(id: number) {
+    this.set({ aiPick: id, aiAlert: false });
+    this.selectCharger(id, false);
+    this.planRoute();
+  }
+  /** demo: ajusta a bateria do carro na mão */
+  setBattery(v: number) {
+    this.car.batt = clamp(v, 1, 100);
+    this.recCache = null;
+    this.set({ batt: this.car.batt, range: this.rangeKm() });
+    this.checkBattery();
+  }
+  private checkBattery() {
+    const R = CFG.ia;
+    if (this.car.batt > R.bateriaAlerta + 5) { this.alerted = false; if (this.state.aiAlert) this.set({ aiAlert: false }); return; }
+    if (this.alerted || this.car.batt > R.bateriaAlerta || (this.state.mode !== "list" && this.state.mode !== "detail")) return;
+    this.alerted = true;
+    const best = this.recommendations().find((r) => r.ok);
+    this.set({ aiAlert: true, mode: "list", selId: null, query: "" });
+    this.toast(best ? `Bateria em ${Math.round(this.car.batt)}%. A EcoCharge AI recomenda ${best.c.name}` : `Bateria em ${Math.round(this.car.batt)}%: nenhum posto seguro ao alcance`);
+  }
+  private dropIntent(who: number | "me") { this.intents = this.intents.filter((i) => i.who !== who); }
 
   /* ---------------- ciclo de vida ---------------- */
   attach(container: HTMLDivElement, canvas: HTMLCanvasElement) {
@@ -149,6 +219,9 @@ export class EVEngine {
     map.on("click", (ev) => this.tap(ev.point.x, ev.point.y));
     map.on("mousemove", (ev) => { map.getCanvas().style.cursor = this.hit(ev.point.x, ev.point.y) ? "pointer" : ""; });
     map.on("load", () => this.flyTo(this.car, CFG.zoomInicial, 0));
+    // bateria já baixa ao abrir: a recomendação aparece em destaque
+    const t = setTimeout(() => this.checkBattery(), 900);
+    this.cleanup.push(() => clearTimeout(t));
 
     const ro = new ResizeObserver(() => { this.resize(); map.resize(); });
     ro.observe(container); this.resize();
@@ -217,7 +290,7 @@ export class EVEngine {
       this.toast(`${c.name}: ${s.free} de ${s.total} livres`); return;
     }
     this.route = null; this.navState = null;
-    this.set({ selId: id, mode: "detail", nav: null });
+    this.set({ selId: id, mode: "detail", nav: null, aiPick: this.state.aiPick === id ? id : null });
     const c = this.w.chargers[id];
     if (fly) requestAnimationFrame(() => this.flyTo(c.pos, Math.max(this.scale, 0.95)));
   }
@@ -243,25 +316,52 @@ export class EVEngine {
     this.navState = { d: 0, seg: 0, lastD: 0 };
     const r = this.route;
     if (r.pts.length > 1) this.car.h = Math.atan2(r.pts[1].y - r.pts[0].y, r.pts[1].x - r.pts[0].x);
-    this.set({ mode: "nav", follow: true });
+    this.registerMyIntent();
+    this.set({ mode: "nav", follow: true, navAlt: null, navFc: null });
     // a UI troca o painel neste quadro; o recuo (padding) da câmera usa o layout novo
     requestAnimationFrame(() => this.navCamera(1100));
     this.emitNav(true);
   }
+  /** sua chegada prevista entra na rede: os outros carros não são mandados para a sua vaga */
+  private registerMyIntent() {
+    const r = this.route; if (!r) return;
+    this.dropIntent("me");
+    const arriveBatt = this.batteryAfter(r.total), car = this.carSpec(arriveBatt);
+    const comp = r.c.cons.filter((x) => car.types.includes(x.type) && x.st !== "offline");
+    const kw = comp.length ? Math.max(...comp.map((x) => powerOn(x, car))) : 0;
+    const dur = Math.max(10, chargeMinutes(Math.max(0, arriveBatt), CFG.ia.metaRecarga, kw, car.capKWh));
+    this.intents.push({ who: "me", chargerId: r.c.id, arrive: this.simMin + this.driveMin(r.total), dur });
+  }
+  /** motorista prefere manter o destino: não insiste enquanto ele não mudar */
+  keepDestination() { this.altMuted = this.route?.c.id ?? null; this.set({ navAlt: null }); }
+  /** troca o destino no meio da navegação (sugestão da EcoCharge AI) */
+  switchTo(id: number) {
+    const c = this.w.chargers[id], r = buildRoute(this.w, this.car, c);
+    if (!r) { this.toast("Não há rota até esse carregador"); return; }
+    this.route = r; this.navState = { d: 0, seg: 0, lastD: 0 };
+    this.set({ selId: id, aiPick: id, navAlt: null });
+    this.registerMyIntent();
+    this.emitNav(true);
+    this.toast(`Rota alterada para ${c.name}`);
+  }
   cancelRoute() {
     const wasNav = this.state.mode === "nav";
+    this.dropIntent("me");
     this.route = null; this.navState = null;
     const sel = this.selected;
-    this.set({ mode: sel ? "detail" : "list", nav: null });
+    this.set({ mode: sel ? "detail" : "list", nav: null, navAlt: null, navFc: null });
     requestAnimationFrame(() => {
       if (wasNav) this.flatCamera();
       if (sel) this.flyTo(sel.pos, Math.max(this.scale, 0.9));
     });
   }
+  /** o conector serve no seu carro? */
+  fits(x: Connector) { return (CFG.veiculo.conectores as readonly string[]).includes(x.type); }
   reserve(n: number) {
     const c = this.selected; if (!c) return;
     const x = c.cons.find((k) => k.n === n);
     if (!x || x.st !== "livre") { this.toast("Esse conector não está mais livre"); return; }
+    if (!this.fits(x)) { this.toast(`O ${CFG.veiculo.nome} não usa conector ${x.type}`); return; }
     this.releaseReservation(false);
     x.st = "reservado";
     this.set({ reservation: { chargerId: c.id, con: n, until: Date.now() + CFG.reservaMin * 60_000 }, rev: this.state.rev + 1 });
@@ -280,6 +380,7 @@ export class EVEngine {
     const res = this.state.reservation;
     const mine = res && res.chargerId === c.id && res.con === n;
     if (!x || (x.st !== "livre" && !(mine && x.st === "reservado"))) { this.toast("Esse conector acabou de ser ocupado"); this.set({ rev: this.state.rev + 1 }); return; }
+    if (!this.fits(x)) { this.toast(`O ${CFG.veiculo.nome} não usa conector ${x.type}`); return; }
     x.st = "voce";
     this.chargeStart = { batt: this.car.batt, con: x, price: parseFloat(c.price.replace(",", ".")) };
     this.set({ mode: "charging", reservation: mine ? null : res });
@@ -319,16 +420,27 @@ export class EVEngine {
 
   /* ---------------- simulação ---------------- */
   private tickLive() {
-    const { w } = this;
-    for (const c of w.chargers) for (const x of c.cons) if (x.st === "ocupado") { x.eta -= 0.6; if (x.eta <= 0) { x.st = "livre"; x.eta = 0; } }
-    for (let k = 0; k < 3; k++) {
-      const c = w.pick(w.chargers), x = w.pick(c.cons);
-      if (x.st === "voce" || x.st === "reservado") continue;
-      const r = w.R();
-      if (x.st === "livre" && r < 0.8) { x.st = "ocupado"; x.eta = 8 + Math.floor(w.R() * 40); }
-      else if (x.st === "offline" && r < 0.3) x.st = "livre";
-      else if (x.st === "livre" && r > 0.97) x.st = "offline";
+    const { w } = this, dtSim = (CFG.intervaloAoVivo / 1000) * CFG.minutosPorSegundo, hour = new Date().getHours();
+    // conectores liberam no relógio da simulação
+    for (const c of w.chargers) for (const x of c.cons) {
+      if (x.st !== "ocupado") continue;
+      x.eta -= dtSim;
+      if (x.eta <= 0) {
+        x.st = "livre"; x.eta = 0;
+        if (x.ev != null) { this.releaseEV(w.evs[x.ev], c); x.ev = undefined; }
+      }
     }
+    // carros de fora da rede chegam conforme a ocupação típica do horário
+    for (const c of w.chargers) {
+      if (w.R() > 1 - Math.exp(-backgroundRate(c, hour) * dtSim)) continue;
+      const free = c.cons.filter((x) => x.st === "livre");
+      if (free.length) { const x = w.pick(free); x.st = "ocupado"; x.eta = 12 + w.R() * 30; }
+    }
+    // falhas e reparos raros
+    if (w.R() < 0.04) { const c = w.pick(w.chargers), x = w.pick(c.cons); if (x.st === "livre") x.st = "offline"; else if (x.st === "offline") x.st = "livre"; }
+    this.tickFleet();
+    this.intents = this.intents.filter((i) => i.who === "me" || this.simMin <= i.arrive + CFG.ia.toleranciaChegada);
+
     const now = performance.now();
     for (const c of w.chargers) {
       const f = stats(c).free;
@@ -337,6 +449,66 @@ export class EVEngine {
     const res = this.state.reservation;
     if (res && Date.now() > res.until) { this.releaseReservation(false); this.toast("Sua reserva expirou"); }
     this.set({ rev: this.state.rev + 1 });
+    this.watchDestination();
+  }
+
+  /* ---------------- frota: os outros carros também usam a EcoCharge AI ---------------- */
+  private fleetCar(ev: RealEV): Car {
+    return { batt: ev.batt, types: CFG.veiculo.conectores, dc: CFG.ia.potenciaFrota, ac: CFG.veiculo.potenciaAC, capKWh: 55 };
+  }
+  private tickFleet() {
+    const { w } = this, R = CFG.ia;
+    for (const ev of w.evs) {
+      // chegou ao posto: a vaga prevista vira fila/ocupação real
+      if (ev.mode === "indo" && ev.arrived) { this.dropIntent(ev.id); ev.mode = "fila"; ev.since = this.simMin; }
+      if (ev.mode !== "fila") continue;
+      const c = w.chargers[ev.target!], car = this.fleetCar(ev);
+      const x = c.cons.filter((k) => k.st === "livre" && car.types.includes(k.type)).sort((a, b) => powerOn(b, car) - powerOn(a, car))[0];
+      if (x) {
+        x.st = "ocupado"; x.ev = ev.id; x.eta = Math.max(8, chargeMinutes(ev.batt, R.metaRecarga, powerOn(x, car), car.capKWh));
+        ev.mode = "carregando";
+      } else if (this.simMin - ev.since! > 20) { ev.mode = "livre"; ev.legs = undefined; ev.since = this.simMin; } // desistiu: pede de novo
+    }
+    // novos pedidos: os mais urgentes (menos bateria) primeiro
+    const active = w.evs.filter((e) => e.mode !== "livre").length;
+    const slots = Math.min(2, R.maxBuscando - active);
+    if (slots <= 0) return;
+    w.evs.filter((e) => e.mode === "livre" && e.batt < R.bateriaBusca && this.simMin - (e.since ?? -99) > 5)
+      .sort((a, b) => a.batt - b.batt).slice(0, slots).forEach((ev) => this.dispatch(ev));
+  }
+  /** a EcoCharge AI escolhe o posto de um EV da frota e registra a chegada prevista dele */
+  private dispatch(ev: RealEV) {
+    const { w } = this, e = w.edges[ev.ei], src = ev.fwd ? e.b : e.a, rest = e.len - ev.s;
+    const r = dijkstra(w, src), car = this.fleetCar(ev);
+    const recs = recommend(w.chargers, car, this.simMin, this.intents, ev.id, (c) => rest + r.dm[c.node], (m) => (m / ev.speed) * CFG.minutosPorSegundo, this.fcOpts(false));
+    const best = recs.find((x) => x.ok), legs = best && legsTo(r, src, best.c.node);
+    ev.since = this.simMin;
+    if (!best || !legs) return;
+    ev.legs = [{ ei: ev.ei, fwd: ev.fwd }, ...legs]; ev.leg = 0; ev.arrived = false; ev.mode = "indo"; ev.target = best.c.id;
+    this.intents.push({ who: ev.id, chargerId: best.c.id, arrive: this.simMin + best.drive, dur: Math.max(8, best.charge) });
+  }
+  private releaseEV(ev: RealEV, c: Charger) {
+    const { w } = this, out = w.adj[c.node];
+    ev.mode = "livre"; ev.batt = 75 + w.R() * 20; ev.legs = undefined; ev.arrived = false; ev.target = undefined;
+    if (out.length) { const o = w.pick(out); ev.ei = o.ei; ev.fwd = o.fwd; ev.s = 0; ev.prev = c.node; }
+  }
+
+  /** navegando: se o destino passar a lotar, procura um posto melhor no caminho */
+  private watchDestination() {
+    const r = this.route, n = this.navState;
+    if (this.state.mode !== "nav" || !r || !n) return;
+    const R = CFG.ia, remain = r.total - n.d, arriveBatt = this.batteryAfter(remain);
+    const fc = forecast(r.c, this.carSpec(arriveBatt), this.simMin, this.simMin + this.driveMin(remain), this.intents, "me", this.fcOpts(true));
+    if (fc.chance >= R.chanceMinima || fc.wait <= 5 || this.altMuted === r.c.id) { this.set({ navFc: fc, navAlt: null }); return; }
+    const reach = dijkstra(this.w, this.w.nearestNode(this.car));
+    const distTo = (c: Charger) => reach.dm[c.node] + dist(this.w.nodes[c.node], c.pos);
+    const recs = recommend(this.w.chargers, this.carSpec(), this.simMin, this.intents, "me", distTo, (m) => this.driveMin(m), this.fcOpts(true));
+    const cur = recs.find((x) => x.c.id === r.c.id), alt = recs.find((x) => x.ok && x.c.id !== r.c.id);
+    const curTotal = cur ? cur.drive + fc.wait + cur.charge : Infinity;
+    const navAlt = alt && alt.total + R.ganhoTroca < curTotal
+      ? { chargerId: alt.c.id, gain: Math.round(curTotal - alt.total), why: fc.incoming ? `${r.c.name} deve lotar: ${fc.incoming} ${fc.incoming > 1 ? "carros chegam" : "carro chega"} antes de você` : `${r.c.name} deve lotar antes da sua chegada` }
+      : null;
+    this.set({ navFc: fc, navAlt });
   }
 
   private stepNav(dt: number) {
@@ -354,6 +526,7 @@ export class EVEngine {
       car.h += dh * Math.min(1, dt * 4);
     }
     car.batt = Math.max(0, car.batt - ((n.d - n.lastD) / 1000) * CFG.veiculo.consumoKWhKm / CFG.veiculo.bateriaKWh * 100);
+    this.recCache = null;
     n.lastD = n.d;
     // câmera de navegação: segue e gira com o carro
     if (this.state.follow && this.map && performance.now() > this.navCamAt)
@@ -381,10 +554,11 @@ export class EVEngine {
     });
   }
   private arrive() {
+    this.dropIntent("me");
     this.car.node = this.w.nearestNode(this.car);
     this.reach = dijkstra(this.w, this.car.node);
     this.route = null; this.navState = null;
-    this.set({ mode: "arrived", nav: null });
+    this.set({ mode: "arrived", nav: null, navAlt: null, navFc: null });
     const sel = this.selected;
     requestAnimationFrame(() => {
       this.flatCamera();
@@ -393,13 +567,13 @@ export class EVEngine {
   }
   private stepCharge(dt: number) {
     const cs = this.chargeStart; if (!cs || this.car.batt >= 100) return;
-    const eff = this.car.batt < 80 ? cs.con.kw : cs.con.kw * 0.35;
+    const kw = powerOn(cs.con, this.carSpec()), eff = this.car.batt < 80 ? kw : kw * 0.35;
     this.car.batt = Math.min(100, this.car.batt + (eff * dt / 3600 / CFG.veiculo.bateriaKWh) * 100 * CFG.aceleracaoRecarga);
     this.emitCharge();
   }
   private emitCharge() {
     const cs = this.chargeStart; if (!cs) return;
-    const b = this.car.batt, kw = cs.con.kw, cap = CFG.veiculo.bateriaKWh;
+    const b = this.car.batt, kw = powerOn(cs.con, this.carSpec()), cap = CFG.veiculo.bateriaKWh;
     const eff = b < 80 ? kw : kw * 0.35;
     const toFull = b >= 100 ? 0 : (((80 - Math.min(b, 80)) / 100) * cap / kw + ((100 - Math.max(b, 80)) / 100) * cap / (kw * 0.35)) * 3600;
     const added = ((b - cs.batt) / 100) * cap;
@@ -416,7 +590,12 @@ export class EVEngine {
   /* ---------------- loop ---------------- */
   private frame = (now: number) => {
     const dt = Math.min(0.05, (now - this.last) / 1000); this.last = now;
-    for (const c of this.w.evs) stepEV(this.w, c, dt);
+    this.simMin += dt * CFG.minutosPorSegundo;
+    const drain = (CFG.veiculo.consumoKWhKm / 55) * 100 * CFG.ia.descargaFrota / 1000;
+    for (const c of this.w.evs) {
+      stepEV(this.w, c, dt);
+      if (c.mode === "livre" || c.mode === "indo") c.batt = Math.max(3, c.batt - c.speed * dt * drain);
+    }
     if (this.state.mode === "nav" && this.navState) this.stepNav(dt);
     if (this.state.mode === "charging") this.stepCharge(dt);
     // a atribuição do mapa sobe junto com o painel inferior (celular)
@@ -503,7 +682,10 @@ export class EVEngine {
     if (!this.state.showEV) return;
     const ctx = this.ctx!, P = this.P;
     const vis: { c: RealEV; p: Pt }[] = [];
-    for (const c of this.w.evs) { const p = this.toScreen(c); if (this.onScreen(p, 20)) vis.push({ c, p }); }
+    for (const c of this.w.evs) {
+      if (c.mode === "fila" || c.mode === "carregando") continue; // está dentro do posto
+      const p = this.toScreen(c); if (this.onScreen(p, 20)) vis.push({ c, p });
+    }
     if (this.scale < CFG.zoomAgruparEVs) {
       const cell = 64, g = new Map<string, typeof vis>();
       for (const v of vis) { const k = Math.floor(v.p.x / cell) + "," + Math.floor(v.p.y / cell); let arr = g.get(k); if (!arr) g.set(k, (arr = [])); arr.push(v); }
@@ -521,7 +703,8 @@ export class EVEngine {
     const ctx = this.ctx!;
     ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(this.screenAngle(c, c.h, p));
     ctx.beginPath(); ctx.moveTo(9, 0); ctx.lineTo(-6, -5.5); ctx.lineTo(-3.5, 0); ctx.lineTo(-6, 5.5); ctx.closePath();
-    ctx.fillStyle = this.P.ev; ctx.lineWidth = 2; ctx.strokeStyle = "#fff"; ctx.lineJoin = "round"; ctx.stroke(); ctx.fill(); ctx.restore();
+    // âmbar = indo carregar pela rota da EcoCharge AI
+    ctx.fillStyle = c.mode === "indo" ? COR_STATUS.warn : this.P.ev; ctx.lineWidth = 2; ctx.strokeStyle = "#fff"; ctx.lineJoin = "round"; ctx.stroke(); ctx.fill(); ctx.restore();
     this.evDrawn.push({ cluster: false, ev: c, x: p.x, y: p.y, r: 13 });
   }
   private drawCar(now: number) {
@@ -562,7 +745,10 @@ export class EVEngine {
       if (best.cluster) {
         const m = this.map!; m.easeTo({ center: m.unproject([best.x, best.y]), zoom: m.getZoom() + 1.2, duration: this.dur(450) });
         this.toast(`${best.n} carros elétricos nesta área`);
-      } else this.toast(`${best.ev.model}, bateria ${best.ev.batt}%`);
+      } else {
+        const ev = best.ev, to = ev.mode === "indo" && ev.target != null ? this.w.chargers[ev.target].name : null;
+        this.toast(`${ev.model}, ${Math.round(ev.batt)}%${to ? ` · indo carregar em ${to} (EcoCharge AI)` : ""}`);
+      }
       return;
     }
     if (this.state.mode === "detail") this.closeDetail();

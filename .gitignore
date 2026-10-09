@@ -5,6 +5,7 @@ next-env.d.ts
 *.tsbuildinfo
 .env*.local
 .DS_Store
+/Docs
 
 # worker do MapLibre (copiado do node_modules no dev/build)
 /public/maplibre/

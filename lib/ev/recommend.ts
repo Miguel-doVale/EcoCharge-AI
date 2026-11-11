@@ -50,7 +50,7 @@ export const powerOn = (x: Connector, car: Car) => Math.min(x.kw, isDC(x) ? car.
 
 /** chegadas de carros de fora da rede por minuto, pela curva de ocupação típica */
 export function backgroundRate(c: Charger, hour: number) {
-  return c.cons.length * 0.012 * (0.25 + c.busyCurve[hour % 24]);
+  return c.cons.length * 0.012 * (0.25 + c.busyCurve[hour % 24]) * (c.demand ?? 1);
 }
 
 /** P(N < k) para N ~ Poisson(mu) */

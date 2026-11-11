@@ -31,7 +31,8 @@ const SPEED = [15, 12, 10, 7];
 /* Carregadores simulados em lugares reais da região (lat, lon, bairro). */
 // `street` fixa o endereço quando a rua mais próxima no cálculo não é a de acesso
 const PLACES: { name: string; lat: number; lon: number; bairro: string; street?: string }[] = [
-  { name: "Estacionamento UNDB", lat: -2.49799, lon: -44.28455, bairro: "Renascença", street: "Rua Júpiter" },
+  // fora da demo: o carro sai da UNDB e o posto mais perto precisa ser o da Lagoa da Jansen
+  // { name: "Estacionamento UNDB", lat: -2.49799, lon: -44.28455, bairro: "Renascença", street: "Rua Júpiter" },
   { name: "Tropical Shopping", lat: -2.50118, lon: -44.2875, bairro: "Renascença" },
   { name: "São Luís Shopping", lat: -2.51103, lon: -44.28531, bairro: "Jaracati" },
   { name: "Jaracati Shopping", lat: -2.50666, lon: -44.284, bairro: "Jaracati" },
@@ -48,8 +49,23 @@ const PLACES: { name: string; lat: number; lon: number; bairro: string; street?:
   { name: "Pátio Calhau", lat: -2.50326, lon: -44.26214, bairro: "Calhau" },
   { name: "Mateus Calhau", lat: -2.49099, lon: -44.25493, bairro: "Calhau" },
 ];
-/** ponto de partida do carro: UNDB, Renascença */
+/** ponto de partida do carro: UNDB, Renascença (o posto da Lagoa fica a ~1,3 km) */
 export const START = { lat: -2.49962, lon: -44.28685 };
+
+/* Cenário da demo: o posto mais perto da partida tem vaga e pouca procura; os
+   outros começam lotados e seguem disputados, então a EcoCharge AI recomenda ele.
+   Para voltar ao sorteio normal dos postos, troque `posto` por null. */
+const CENARIO = {
+  posto: "Lagoa da Jansen" as string | null,
+  conectores: [
+    { type: "CCS2", kw: 180, st: "livre" }, { type: "CCS2", kw: 180, st: "livre" },
+    { type: "CCS2", kw: 150, st: "livre" }, { type: "CCS2", kw: 150, st: "ocupado" },
+    { type: "CCS2", kw: 150, st: "livre" }, { type: "CCS2", kw: 120, st: "ocupado" },
+    { type: "Tipo 2", kw: 22, st: "livre" }, { type: "Tipo 2", kw: 22, st: "ocupado" },
+  ] as const,
+  procuraPosto: 0.5, // chegada de carros de fora da rede no posto recomendado (1 = normal)
+  procuraOutros: 12, // nos outros: vaga que libera é ocupada logo em seguida
+};
 
 export function createRealWorld(data: RoadData, seed = CFG.seed) {
   const R = mulberry(seed);
@@ -106,6 +122,20 @@ export function createRealWorld(data: RoadData, seed = CFG.seed) {
     const street = pl.street ?? streetNear(pos);
     return { id, name: pl.name, addr: street ? `${street} · ${pl.bairro}` : pl.bairro, pos, node: nearestNode(pos), ...chargerProfile(R) };
   });
+
+  if (CENARIO.posto) {
+    const Rc = mulberry(seed + 1); // sorteio próprio: não muda a frota gerada abaixo
+    for (const c of chargers) {
+      if (c.name === CENARIO.posto) {
+        c.cons = CENARIO.conectores.map((x, k) => ({ n: k + 1, type: x.type, kw: x.kw, st: x.st, eta: x.st === "ocupado" ? 10 + Math.floor(Rc() * 20) : 0 }));
+        c.demand = CENARIO.procuraPosto;
+        c.open24 = true;
+      } else {
+        for (const x of c.cons) if (x.st === "livre") { x.st = "ocupado"; x.eta = 25 + Math.floor(Rc() * 45); }
+        c.demand = CENARIO.procuraOutros;
+      }
+    }
+  }
 
   /* ---------- EVs circulando pelas ruas ---------- */
   const evs: RealEV[] = [];

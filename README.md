@@ -35,7 +35,7 @@ npm run build      # build de produção
 
 - **Mapa real de São Luís** (Ponta d'Areia, São Francisco, Renascença, Cohafuma, Calhau) com arrastar, pinça, roda do mouse, duplo toque e teclado.
 - Prédios em 3D quando o zoom está próximo.
-- 16 carregadores **simulados** em pontos reais da região (UNDB, Tropical Shopping, Lagoa da Jansen, Litorânea…), com número de vagas livres e cor de status. O marcador pulsa quando o status muda.
+- 15 carregadores **simulados** em pontos reais da região (Tropical Shopping, Lagoa da Jansen, Litorânea…), com número de vagas livres e cor de status. O marcador pulsa quando o status muda.
 - EVs circulando pelas ruas reais (respeitando mão única), agrupados em clusters ao afastar o zoom.
 - Card do posto: conectores totais/livres/ocupados/kW, cada conector com previsão de liberação, gráfico de **ocupação típica por hora**, comodidades, preço e nota.
 - **Reserva de conector** por 15 min, com contagem regressiva. Ao chegar, a recarga começa no conector reservado.
@@ -100,7 +100,7 @@ scripts/
 - **Quantidade de carregadores/EVs, velocidade da simulação, tempo de reserva:** `CFG` no mesmo arquivo.
 - **Cores do mapa:** `PALETA_DIA` / `PALETA_NOITE`. **Cores de status:** `COR_STATUS`.
 - **Nomes de ruas, postos e operadoras:** listas no fim de `config.ts`.
-- **Lugares dos carregadores:** lista `PLACES` em `lib/ev/realworld.ts` (nome, lat/lon, bairro). Ponto de partida do carro: `START`.
+- **Lugares dos carregadores:** lista `PLACES` em `lib/ev/realworld.ts` (nome, lat/lon, bairro). Ponto de partida do carro: `START`. O cenário da demo (posto da Lagoa da Jansen com vaga, os outros lotados) fica em `CENARIO`, no mesmo arquivo; `posto: null` volta ao sorteio normal.
 - **Recorte do mapa:** `BBOX` em `scripts/build-saoluis-map.mjs`; depois rode `npm run map:data`.
 - **Cidade da cena 3D da landing:** troque `CFG.seed`.
 - **Carro 3D:** formas, cores e posições em `components/landing/car/CarModel.tsx` (`CAR` guarda dobradiça da porta, posição da tela e do olho do motorista). Cores da pintura: `#eef1f0` (cima) e `uLower` (baixo). Câmera e animação de entrada/saída: `components/landing/car/CarScene.tsx`.

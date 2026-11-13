@@ -52,9 +52,9 @@ const PLACES: { name: string; lat: number; lon: number; bairro: string; street?:
 /** ponto de partida do carro: UNDB, Renascença (o posto da Lagoa fica a ~1,3 km) */
 export const START = { lat: -2.49962, lon: -44.28685 };
 
-/* Cenário da demo: o posto mais perto da partida tem vaga e pouca procura; os
-   outros começam lotados e seguem disputados, então a EcoCharge AI recomenda ele.
-   Para voltar ao sorteio normal dos postos, troque `posto` por null. */
+/* Cenário da demo: o posto mais perto da partida tem carga rápida, vaga e pouca
+   procura, então a EcoCharge AI recomenda ele. Os outros seguem o sorteio normal.
+   Para sortear este posto também, troque `posto` por null. */
 const CENARIO = {
   posto: "Lagoa da Jansen" as string | null,
   conectores: [
@@ -64,7 +64,6 @@ const CENARIO = {
     { type: "Tipo 2", kw: 22, st: "livre" }, { type: "Tipo 2", kw: 22, st: "ocupado" },
   ] as const,
   procuraPosto: 0.5, // chegada de carros de fora da rede no posto recomendado (1 = normal)
-  procuraOutros: 12, // nos outros: vaga que libera é ocupada logo em seguida
 };
 
 export function createRealWorld(data: RoadData, seed = CFG.seed) {
@@ -130,9 +129,6 @@ export function createRealWorld(data: RoadData, seed = CFG.seed) {
         c.cons = CENARIO.conectores.map((x, k) => ({ n: k + 1, type: x.type, kw: x.kw, st: x.st, eta: x.st === "ocupado" ? 10 + Math.floor(Rc() * 20) : 0 }));
         c.demand = CENARIO.procuraPosto;
         c.open24 = true;
-      } else {
-        for (const x of c.cons) if (x.st === "livre") { x.st = "ocupado"; x.eta = 25 + Math.floor(Rc() * 45); }
-        c.demand = CENARIO.procuraOutros;
       }
     }
   }

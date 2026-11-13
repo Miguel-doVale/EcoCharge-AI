@@ -22,8 +22,11 @@ export type Charger = {
   cons: Connector[]; price: string; open24: boolean; amenities: string[];
   /** ocupação típica por hora (0..1), estilo "horários de pico" */
   busyCurve: number[]; rating: number;
-  /** multiplica a chegada de carros de fora da rede (cenário da demo); padrão 1 */
-  demand?: number;
+  /** cenário da demo: chegadas de carros de fora da rede por conector por minuto,
+      fixas (sem depender do horário). Sem isso, vale a curva de ocupação típica. */
+  rate?: number;
+  /** cenário da demo: a frota simulada não usa este posto e os conectores não falham */
+  keepFree?: boolean;
 };
 export type EV = { u: number; v: number; e: Edge; t: number; speed: number; model: string; batt: number; x: number; y: number; h: number };
 export type Level = "ok" | "warn" | "full" | "off";

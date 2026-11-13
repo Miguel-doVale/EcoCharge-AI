@@ -5,7 +5,7 @@
    Coordenadas internas em metros: x = leste, y = sul (como a tela).
    ========================================================= */
 import { CFG, MODELOS_EV } from "./config";
-import { chargerProfile, clamp, dist, mulberry, type Charger, type Pt } from "./world";
+import { chargerProfile, clamp, dist, mulberry, type Charger, type ConnectorStatus, type ConnectorType, type Pt } from "./world";
 
 export type RoadData = {
   ref: { lat: number; lon: number };
@@ -52,18 +52,24 @@ const PLACES: { name: string; lat: number; lon: number; bairro: string; street?:
 /** ponto de partida do carro: UNDB, Renascença (o posto da Lagoa fica a ~1,3 km) */
 export const START = { lat: -2.49962, lon: -44.28685 };
 
-/* Cenário da demo: o posto mais perto da partida tem carga rápida, vaga e pouca
-   procura, então a EcoCharge AI recomenda ele. Os outros seguem o sorteio normal.
-   Para sortear este posto também, troque `posto` por null. */
+/* Cenário da demo: o posto mais perto da partida tem carga rápida, está vazio e com pouca
+   procura, então a EcoCharge AI recomenda ele. Os de `lotados` ficam sem vaga (vermelhos),
+   os de `disputados` com poucas vagas (amarelos) e os outros seguem o sorteio normal.
+   As procuras são chegadas de carros de fora da rede por conector por minuto.
+   Para sortear tudo, troque `posto` por null. */
 const CENARIO = {
   posto: "Lagoa da Jansen" as string | null,
   conectores: [
     { type: "CCS2", kw: 180, st: "livre" }, { type: "CCS2", kw: 180, st: "livre" },
-    { type: "CCS2", kw: 150, st: "livre" }, { type: "CCS2", kw: 150, st: "ocupado" },
-    { type: "CCS2", kw: 150, st: "livre" }, { type: "CCS2", kw: 120, st: "ocupado" },
-    { type: "Tipo 2", kw: 22, st: "livre" }, { type: "Tipo 2", kw: 22, st: "ocupado" },
-  ] as const,
-  procuraPosto: 0.5, // chegada de carros de fora da rede no posto recomendado (1 = normal)
+    { type: "CCS2", kw: 150, st: "livre" }, { type: "CCS2", kw: 150, st: "livre" },
+    { type: "CCS2", kw: 150, st: "livre" }, { type: "CCS2", kw: 120, st: "livre" },
+    { type: "Tipo 2", kw: 22, st: "livre" }, { type: "Tipo 2", kw: 22, st: "livre" },
+  ] as { type: ConnectorType; kw: number; st: ConnectorStatus }[],
+  procuraPosto: 0, // nenhum carro de fora chega: o posto fica vazio até você
+  lotados: ["Tropical Shopping", "Hiper Mateus Renascença", "Mateus Food Service", "Rangedor Mall"] as string[],
+  procuraLotados: 0.17, // vaga que libera é ocupada quase na hora
+  disputados: ["São Luís Shopping", "Jaracati Shopping", "Pátio Calhau"] as string[],
+  procuraDisputados: 0.025, // mantém em torno de 1/4 das vagas livres
 };
 
 export function createRealWorld(data: RoadData, seed = CFG.seed) {
@@ -124,11 +130,23 @@ export function createRealWorld(data: RoadData, seed = CFG.seed) {
 
   if (CENARIO.posto) {
     const Rc = mulberry(seed + 1); // sorteio próprio: não muda a frota gerada abaixo
+    const occupy = (x: Charger["cons"][number]) => { x.st = "ocupado"; x.eta = 25 + Math.floor(Rc() * 45); };
     for (const c of chargers) {
       if (c.name === CENARIO.posto) {
         c.cons = CENARIO.conectores.map((x, k) => ({ n: k + 1, type: x.type, kw: x.kw, st: x.st, eta: x.st === "ocupado" ? 10 + Math.floor(Rc() * 20) : 0 }));
-        c.demand = CENARIO.procuraPosto;
+        c.rate = CENARIO.procuraPosto;
+        c.keepFree = true;
         c.open24 = true;
+      } else if (CENARIO.lotados.includes(c.name)) {
+        for (const x of c.cons) if (x.st === "livre") occupy(x);
+        c.rate = CENARIO.procuraLotados;
+      } else if (CENARIO.disputados.includes(c.name)) {
+        // começa amarelo: até 1/3 dos conectores funcionando livres, nunca zero
+        const work = c.cons.filter((x) => x.st !== "offline"), keep = Math.max(1, Math.floor(work.length * 0.34));
+        const free = () => c.cons.filter((x) => x.st === "livre");
+        while (free().length > keep) occupy(free()[0]);
+        for (const x of work) if (free().length < keep && x.st === "ocupado") { x.st = "livre"; x.eta = 0; }
+        c.rate = CENARIO.procuraDisputados;
       }
     }
   }

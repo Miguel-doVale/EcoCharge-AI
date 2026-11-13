@@ -437,7 +437,7 @@ export class EVEngine {
       if (free.length) { const x = w.pick(free); x.st = "ocupado"; x.eta = 12 + w.R() * 30; }
     }
     // falhas e reparos raros
-    if (w.R() < 0.04) { const c = w.pick(w.chargers), x = w.pick(c.cons); if (x.st === "livre") x.st = "offline"; else if (x.st === "offline") x.st = "livre"; }
+    if (w.R() < 0.04) { const c = w.pick(w.chargers), x = w.pick(c.cons); if (c.keepFree) { /* posto do cenário da demo: não falha */ } else if (x.st === "livre") x.st = "offline"; else if (x.st === "offline") x.st = "livre"; }
     this.tickFleet();
     this.intents = this.intents.filter((i) => i.who === "me" || this.simMin <= i.arrive + CFG.ia.toleranciaChegada);
 
@@ -480,7 +480,7 @@ export class EVEngine {
   private dispatch(ev: RealEV) {
     const { w } = this, e = w.edges[ev.ei], src = ev.fwd ? e.b : e.a, rest = e.len - ev.s;
     const r = dijkstra(w, src), car = this.fleetCar(ev);
-    const recs = recommend(w.chargers, car, this.simMin, this.intents, ev.id, (c) => rest + r.dm[c.node], (m) => (m / ev.speed) * CFG.minutosPorSegundo, this.fcOpts(false));
+    const recs = recommend(w.chargers.filter((c) => !c.keepFree), car, this.simMin, this.intents, ev.id, (c) => rest + r.dm[c.node], (m) => (m / ev.speed) * CFG.minutosPorSegundo, this.fcOpts(false));
     const best = recs.find((x) => x.ok), legs = best && legsTo(r, src, best.c.node);
     ev.since = this.simMin;
     if (!best || !legs) return;
